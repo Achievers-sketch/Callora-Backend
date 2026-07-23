@@ -1,53 +1,64 @@
-import './config/env.js'
-import express from 'express';
-import helmet from 'helmet';
-import { initializeDb, closeDb } from './db/index.js';
-import { closePgPool, pool } from './db.js';
-import { closeDbPool } from './config/health.js';
-import { config } from './config/index.js';
-import { disconnectPrisma } from './lib/prisma.js';
-import { legacyV1DeprecationMiddleware } from './middleware/deprecation.js';
-import { errorHandler } from './middleware/errorHandler.js';
-import { createGatewayIpAllowlist } from './middleware/ipAllowlist.js';
-import { createAccessLogMiddleware } from './middleware/accessLog.js';
-import { requestIdMiddleware } from './middleware/requestId.js';
-import { metricsEndpoint } from './metrics.js';
-import { awaitWebhookDispatcherIdle, stopWebhookDispatching } from './webhooks/webhook.dispatcher.js';
+import "./config/env.js";
+import express from "express";
+import helmet from "helmet";
+import { initializeDb, closeDb } from "./db/index.js";
+import { closePgPool, pool } from "./db.js";
+import { closeDbPool } from "./config/health.js";
+import { config } from "./config/index.js";
+import { disconnectPrisma } from "./lib/prisma.js";
+import { legacyV1DeprecationMiddleware } from "./middleware/deprecation.js";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { createGatewayIpAllowlist } from "./middleware/ipAllowlist.js";
+import { createAccessLogMiddleware } from "./middleware/accessLog.js";
+import { requestIdMiddleware } from "./middleware/requestId.js";
+import { metricsEndpoint } from "./metrics.js";
+import {
+  awaitWebhookDispatcherIdle,
+  stopWebhookDispatching,
+} from "./webhooks/webhook.dispatcher.js";
 import {
   createGracefulShutdownHandler,
   createInFlightDrainTracker,
   type DrainableSubsystem,
-} from './lifecycle/shutdown.js';
-import type { Socket } from 'net';
-import type { Server } from 'http';
+} from "./lifecycle/shutdown.js";
+import type { Socket } from "net";
+import type { Server } from "http";
 
-import { createDeveloperRouter } from './routes/developerRoutes.js';
-import { createGatewayRouter } from './routes/gatewayRoutes.js';
-import { createProxyRouter } from './routes/proxyRoutes.js';
-import adminRouter from './routes/admin.js';
-import { createUsageAnomaliesRouter } from './routes/admin/usage/anomalies.js';
-import { defaultDeveloperRepository } from './repositories/developerRepository.js';
-import { createBillingService } from './services/billingService.js';
-import { createRateLimiter } from './services/rateLimiter.js';
-import { PgUsageEventsRepository } from './repositories/usageEventsRepository.pg.js';
-import { createRevenueLedgerIndexerJob } from './services/revenueLedgerIndexer.js';
-import { RevenueSettlementService } from './services/revenueSettlementService.js';
-import { createSettlementStatusSyncJob } from './services/settlementStatusSyncJob.js';
-import { createSettlementReconciliationJob } from './services/settlementReconciliationJob.js';
-import { createIdempotencySweeperJob } from './services/idempotencySweeper.js';
-import { createPostgresUsageStore } from './services/usageStore.js';
-import { createPostgresSettlementStore } from './services/settlementStore.js';
-import { createApiRegistry } from './data/apiRegistry.js';
-import { ApiKey } from './types/gateway.js';
-import { listingsCache } from './lib/listingsCache.js';
-import { createSlowQueryAlerterJob } from './workers/slowQueryAlerter.js';
-import { createAnomalyDetectorJob } from './workers/anomalyDetector.js';
+import { createDeveloperRouter } from "./routes/developerRoutes.js";
+import { createGatewayRouter } from "./routes/gatewayRoutes.js";
+import { createProxyRouter } from "./routes/proxyRoutes.js";
+import adminRouter from "./routes/admin.js";
+import { createUsageAnomaliesRouter } from "./routes/admin/usage/anomalies.js";
+import { defaultDeveloperRepository } from "./repositories/developerRepository.js";
+import { createBillingService } from "./services/billingService.js";
+import { createRateLimiter } from "./services/rateLimiter.js";
+import { PgUsageEventsRepository } from "./repositories/usageEventsRepository.pg.js";
+import { createRevenueLedgerIndexerJob } from "./services/revenueLedgerIndexer.js";
+import { RevenueSettlementService } from "./services/revenueSettlementService.js";
+import { createSettlementStatusSyncJob } from "./services/settlementStatusSyncJob.js";
+import { createSettlementReconciliationJob } from "./services/settlementReconciliationJob.js";
+import { createIdempotencySweeperJob } from "./services/idempotencySweeper.js";
+import { createPostgresUsageStore } from "./services/usageStore.js";
+import { createPostgresSettlementStore } from "./services/settlementStore.js";
+import { createApiRegistry } from "./data/apiRegistry.js";
+import { ApiKey } from "./types/gateway.js";
+import { listingsCache } from "./lib/listingsCache.js";
+import { createSlowQueryAlerterJob } from "./workers/slowQueryAlerter.js";
+import { createAnomalyDetectorJob } from "./workers/anomalyDetector.js";
+import { createMonthlyInvoiceJob } from "./workers/monthlyInvoiceJob.js";
 
 // Helper for Jest/CommonJS compat
-const isDirectExecution = process.argv[1] && (process.argv[1].endsWith('index.ts') || process.argv[1].endsWith('index.js'));
+const isDirectExecution =
+  process.argv[1] &&
+  (process.argv[1].endsWith("index.ts") ||
+    process.argv[1].endsWith("index.js"));
 
 // Re-export types and functions from lifecycle/shutdown for backward compatibility
-export { createGracefulShutdownHandler, createInFlightDrainTracker, type DrainableSubsystem } from './lifecycle/shutdown.js';
+export {
+  createGracefulShutdownHandler,
+  createInFlightDrainTracker,
+  type DrainableSubsystem,
+} from "./lifecycle/shutdown.js";
 
 export const app = express();
 
@@ -61,7 +72,7 @@ app.use(
 
 // Standard JSON middleware for non-webhook routes
 app.use((req, res, next) => {
-  if (req.path === '/api/webhooks') {
+  if (req.path === "/api/webhooks") {
     // Skip JSON parsing for webhook route (we need raw body)
     next();
   } else {
@@ -70,26 +81,29 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'callora-backend' });
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", service: "callora-backend" });
 });
 
 // Metrics endpoint
-app.get('/api/metrics', metricsEndpoint);
+app.get("/api/metrics", metricsEndpoint);
 
 // Check if fil is being run directly (CommonJS / ESM compatibility trick for ts-jest)
 
 if (isDirectExecution) {
-
   // Apply basic Helmet security headers for the main app
-  const isProduction = process.env.NODE_ENV === 'production';
-  app.use(helmet({
-    hsts: isProduction ? {
-      maxAge: 31536000,
-      includeSubDomains: true,
-      preload: true
-    } : false,
-  }));
+  const isProduction = process.env.NODE_ENV === "production";
+  app.use(
+    helmet({
+      hsts: isProduction
+        ? {
+            maxAge: 31536000,
+            includeSubDomains: true,
+            preload: true,
+          }
+        : false,
+    }),
+  );
 
   // Shared services
   const MOCK_DEVELOPER_BALANCES: Record<string, number> = {
@@ -102,10 +116,13 @@ if (isDirectExecution) {
   const usageStore = createPostgresUsageStore(pool);
   const settlementStore = createPostgresSettlementStore(pool);
   const usageEventsRepository = new PgUsageEventsRepository(pool);
-  const revenueLedgerIndexerJob = createRevenueLedgerIndexerJob(usageEventsRepository, {
-    intervalMs: config.revenueLedgerIndexer.intervalMs,
-    batchSize: config.revenueLedgerIndexer.batchSize,
-  });
+  const revenueLedgerIndexerJob = createRevenueLedgerIndexerJob(
+    usageEventsRepository,
+    {
+      intervalMs: config.revenueLedgerIndexer.intervalMs,
+      batchSize: config.revenueLedgerIndexer.batchSize,
+    },
+  );
   const registry = createApiRegistry();
   const revenueSettlementService = new RevenueSettlementService(
     usageStore,
@@ -114,16 +131,20 @@ if (isDirectExecution) {
     {
       distribute: async () => ({
         success: false,
-        error: 'Runtime settlement distribution is not configured in this process',
+        error:
+          "Runtime settlement distribution is not configured in this process",
       }),
     },
     {
       horizonRequestTimeoutMs: config.settlementSync.timeoutMs,
     },
   );
-  const settlementStatusSyncJob = createSettlementStatusSyncJob(revenueSettlementService, {
-    intervalMs: config.settlementSync.intervalMs,
-  });
+  const settlementStatusSyncJob = createSettlementStatusSyncJob(
+    revenueSettlementService,
+    {
+      intervalMs: config.settlementSync.intervalMs,
+    },
+  );
 
   const settlementReconJob = createSettlementReconciliationJob(pool, {
     intervalMs: config.settlementRecon.intervalMs,
@@ -156,9 +177,19 @@ if (isDirectExecution) {
       })
     : null;
 
+  const monthlyInvoiceJob = createMonthlyInvoiceJob(pool, {
+    intervalMs: config.monthlyInvoiceJob.intervalMs,
+  });
+
   const apiKeys = new Map<string, ApiKey>([
-    ['test-key-1', { key: 'test-key-1', developerId: 'dev_001', apiId: 'api_001' }],
-    ['test-key-2', { key: 'test-key-2', developerId: 'dev_002', apiId: 'api_002' }],
+    [
+      "test-key-1",
+      { key: "test-key-1", developerId: "dev_001", apiId: "api_001" },
+    ],
+    [
+      "test-key-2",
+      { key: "test-key-2", developerId: "dev_002", apiId: "api_002" },
+    ],
   ]);
 
   // 1. Developer Dashboard Routes (Auth required)
@@ -167,11 +198,11 @@ if (isDirectExecution) {
     usageStore,
     developerRepository: defaultDeveloperRepository,
   });
-  app.use('/api/developers', developerRouter);
+  app.use("/api/developers", developerRouter);
   // Mounted before the generic admin router so it is not shadowed by
   // adminRouter's `/usage/:developerId` route.
-  app.use('/api/admin/usage/anomalies', createUsageAnomaliesRouter({ pool }));
-  app.use('/api/admin', adminRouter);
+  app.use("/api/admin/usage/anomalies", createUsageAnomaliesRouter({ pool }));
+  app.use("/api/admin", adminRouter);
 
   // Legacy gateway route (existing)
   const gatewayRouter = createGatewayRouter({
@@ -181,7 +212,7 @@ if (isDirectExecution) {
     upstreamUrl: config.proxy.upstreamUrl,
     apiKeys,
   });
-  app.use('/api/gateway', createGatewayIpAllowlist(), gatewayRouter);
+  app.use("/api/gateway", createGatewayIpAllowlist(), gatewayRouter);
 
   // New proxy route: /v1/call/:apiSlugOrId/*
   const proxyRouter = createProxyRouter({
@@ -195,26 +226,26 @@ if (isDirectExecution) {
       allowedHosts: config.proxy.allowedHosts,
     },
   });
-  const proxyDrainTracker = createInFlightDrainTracker('gateway-proxy');
+  const proxyDrainTracker = createInFlightDrainTracker("gateway-proxy");
   const shutdownSubsystems: DrainableSubsystem[] = [
     proxyDrainTracker.subsystem,
     {
-      name: 'revenue-ledger-indexer',
+      name: "revenue-ledger-indexer",
       beginShutdown: () => revenueLedgerIndexerJob.beginShutdown(),
       awaitIdle: () => revenueLedgerIndexerJob.awaitIdle(),
     },
     {
-      name: 'idempotency-sweeper',
+      name: "idempotency-sweeper",
       beginShutdown: () => idempotencySweeperJob.beginShutdown(),
       awaitIdle: () => idempotencySweeperJob.awaitIdle(),
     },
     {
-      name: 'webhook-dispatcher',
+      name: "webhook-dispatcher",
       beginShutdown: stopWebhookDispatching,
       awaitIdle: awaitWebhookDispatcherIdle,
     },
     {
-      name: 'settlement-reconciliation',
+      name: "settlement-reconciliation",
       beginShutdown: () => settlementReconJob.beginShutdown(),
       awaitIdle: () => settlementReconJob.awaitIdle(),
     },
@@ -222,7 +253,7 @@ if (isDirectExecution) {
 
   if (slowQueryAlerterJob) {
     shutdownSubsystems.push({
-      name: 'slow-query-alerter',
+      name: "slow-query-alerter",
       beginShutdown: () => slowQueryAlerterJob.beginShutdown(),
       awaitIdle: () => slowQueryAlerterJob.awaitIdle(),
     });
@@ -230,14 +261,23 @@ if (isDirectExecution) {
 
   if (anomalyDetectorJob) {
     shutdownSubsystems.push({
-      name: 'usage-anomaly-detector',
+      name: "usage-anomaly-detector",
       beginShutdown: () => anomalyDetectorJob.beginShutdown(),
       awaitIdle: () => anomalyDetectorJob.awaitIdle(),
     });
   }
-  app.use('/v1/call', legacyV1DeprecationMiddleware, proxyDrainTracker.middleware);
-  app.use('/v1/call', proxyRouter);
 
+  shutdownSubsystems.push({
+    name: "monthly-invoice-job",
+    beginShutdown: () => monthlyInvoiceJob.beginShutdown(),
+    awaitIdle: () => monthlyInvoiceJob.awaitIdle(),
+  });
+  app.use(
+    "/v1/call",
+    legacyV1DeprecationMiddleware,
+    proxyDrainTracker.middleware,
+  );
+  app.use("/v1/call", proxyRouter);
 
   app.use(express.json());
 
@@ -253,6 +293,7 @@ if (isDirectExecution) {
     idempotencySweeperJob.stop();
     slowQueryAlerterJob?.stop();
     anomalyDetectorJob?.stop();
+    monthlyInvoiceJob.stop();
     await closeDb();
     await Promise.allSettled([
       closePgPool(),
@@ -268,16 +309,18 @@ if (isDirectExecution) {
 
       // Warm the listings cache before accepting traffic so the first
       // request after a deploy is served from cache, not from a cold DB hit.
-      const { warmupListingsCache } = await import('./lib/listingsCache.js');
-      const { defaultApiRepository } = await import('./repositories/apiRepository.js');
+      const { warmupListingsCache } = await import("./lib/listingsCache.js");
+      const { defaultApiRepository } =
+        await import("./repositories/apiRepository.js");
       await warmupListingsCache(
         listingsCache,
-        (params) => defaultApiRepository.listPublic({
-          limit: params.limit,
-          offset: params.offset,
-          category: params.category,
-          search: params.search,
-        }),
+        (params) =>
+          defaultApiRepository.listPublic({
+            limit: params.limit,
+            offset: params.offset,
+            category: params.category,
+            search: params.search,
+          }),
         { timeoutMs: config.listingsCache.warmupTimeoutMs },
       );
 
@@ -287,7 +330,8 @@ if (isDirectExecution) {
       idempotencySweeperJob.start();
       slowQueryAlerterJob?.start();
       anomalyDetectorJob?.start();
-      
+      monthlyInvoiceJob.start();
+
       const server = app.listen(PORT, () => {
         console.log(`Callora backend listening on http://localhost:${PORT}`);
       });
@@ -295,9 +339,9 @@ if (isDirectExecution) {
       // Track active connections so we can wait for them to finish
       const activeConnections = new Set<Socket>();
 
-      server.on('connection', (socket: Socket) => {
+      server.on("connection", (socket: Socket) => {
         activeConnections.add(socket);
-        socket.once('close', () => activeConnections.delete(socket));
+        socket.once("close", () => activeConnections.delete(socket));
       });
 
       const gracefulShutdown = createGracefulShutdownHandler({
@@ -315,11 +359,10 @@ if (isDirectExecution) {
       };
 
       // Register shutdown signals
-      process.once('SIGTERM', () => onSignal('SIGTERM'));
-      process.once('SIGINT', () => onSignal('SIGINT'));
-
+      process.once("SIGTERM", () => onSignal("SIGTERM"));
+      process.once("SIGINT", () => onSignal("SIGINT"));
     } catch (error) {
-      console.error('Failed to start server:', error);
+      console.error("Failed to start server:", error);
       process.exit(1);
     }
   }

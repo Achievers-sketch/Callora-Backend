@@ -249,4 +249,8 @@ export const config = {
     baselineWindows: env.USAGE_ANOMALY_BASELINE_WINDOWS,
     dedupWindowMs: env.USAGE_ANOMALY_DEDUP_WINDOW_MS ?? env.USAGE_ANOMALY_WINDOW_MS,
   },
+
+  monthlyInvoiceJob: {
+    intervalMs: env.MONTHLY_INVOICE_JOB_INTERVAL_MS,
+  },
 } as const;
