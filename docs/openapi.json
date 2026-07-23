@@ -1141,10 +1141,20 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["plugins", "total"],
+                  "required": [
+                    "plugins",
+                    "total"
+                  ],
                   "properties": {
-                    "plugins": { "type": "array", "items": { "$ref": "#/components/schemas/PluginRecord" } },
-                    "total": { "type": "integer" }
+                    "plugins": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PluginRecord"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -1155,12 +1165,18 @@
       "post": {
         "summary": "Register a new plugin",
         "description": "Registers a new community plugin manifest. Requires authentication.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PluginManifest" }
+              "schema": {
+                "$ref": "#/components/schemas/PluginManifest"
+              }
             }
           }
         },
@@ -1169,33 +1185,122 @@
             "description": "Plugin registered",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PluginRecord" }
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
               }
             }
           },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Plugin already registered", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Plugin already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/marketplace/plugins/{id}": {
       "get": {
         "summary": "Get a plugin by ID",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Plugin found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginRecord" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": {
+            "description": "Plugin found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
         "summary": "Remove a plugin from the registry",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "204": { "description": "Plugin removed" },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "204": {
+            "description": "Plugin removed"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -1203,8 +1308,21 @@
       "post": {
         "summary": "Install a plugin",
         "description": "Marks a plugin as installed and fires the install hook. Requires authentication.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Plugin installed",
@@ -1212,17 +1330,29 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["plugin"],
+                  "required": [
+                    "plugin"
+                  ],
                   "properties": {
-                    "plugin": { "$ref": "#/components/schemas/PluginRecord" },
+                    "plugin": {
+                      "$ref": "#/components/schemas/PluginRecord"
+                    },
                     "hook": {
                       "nullable": true,
                       "type": "object",
                       "properties": {
-                        "ok": { "type": "boolean" },
-                        "hook": { "type": "string" },
-                        "pluginId": { "type": "string" },
-                        "sandboxed": { "type": "boolean" }
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "hook": {
+                          "type": "string"
+                        },
+                        "pluginId": {
+                          "type": "string"
+                        },
+                        "sandboxed": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -1230,21 +1360,221 @@
               }
             }
           },
-          "400": { "description": "Bad request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Already installed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
         "summary": "Uninstall a plugin",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Plugin uninstalled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginRecord" } } } },
-          "400": { "description": "Not installed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": {
+            "description": "Plugin uninstalled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/db/explain": {
+      "post": {
+        "summary": "Run EXPLAIN ANALYZE on a read-only SQL query",
+        "description": "Executes `EXPLAIN (ANALYZE, FORMAT JSON)` against the primary database pool for a caller-supplied SELECT or WITH query. Only read-only SQL is accepted; multi-statement payloads and any non-SELECT/WITH keyword are rejected at the boundary before the query reaches the database. The raw JSON query plan is returned so admins can diagnose slow queries and missing indexes without needing direct database access. Every call emits a structured audit log entry (`DB_EXPLAIN`) containing the caller identity, client IP, User-Agent, query text, and parameter count. Requires admin authentication (API key or JWT with role=admin) and the admin IP allowlist.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "query"
+                ],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50000,
+                    "description": "SQL query to explain. Must begin with SELECT or WITH (CTEs allowed). Multi-statement queries are rejected.",
+                    "example": "SELECT * FROM usage_events WHERE developer_id = $1 ORDER BY created_at DESC LIMIT 100"
+                  },
+                  "params": {
+                    "type": "array",
+                    "items": {},
+                    "description": "Positional parameter bindings ($1, $2, ...) for the query. Defaults to an empty array.",
+                    "example": [
+                      "dev_abc123"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Query plan returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plan": {
+                      "description": "The PostgreSQL EXPLAIN (ANALYZE, FORMAT JSON) output. Contains a single JSON plan node when the QUERY PLAN column is present; falls back to the raw rows array otherwise.",
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "description": "JSON-serialised plan from the QUERY PLAN column"
+                        },
+                        {
+                          "type": "array",
+                          "description": "Raw result rows when QUERY PLAN column is absent",
+                          "items": {}
+                        }
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "plan": "[{\"Plan\":{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"usage_events\",\"Startup Cost\":0.00,\"Total Cost\":28.50,\"Plan Rows\":500,\"Plan Width\":64,\"Actual Startup Time\":0.02,\"Actual Total Time\":0.85,\"Actual Rows\":500,\"Actual Loops\":1},\"Planning Time\":0.12,\"Execution Time\":0.93}]"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body, disallowed query type, multi-statement query, or database execution error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing or invalid admin credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden by admin IP allowlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database pool not available or internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1265,30 +1595,84 @@
     "schemas": {
       "PluginManifest": {
         "type": "object",
-        "required": ["id", "name", "version", "hooks"],
+        "required": [
+          "id",
+          "name",
+          "version",
+          "hooks"
+        ],
         "properties": {
-          "id": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
-          "name": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-          "description": { "type": "string", "maxLength": 512 },
-          "author": { "type": "string", "maxLength": 128 },
+          "id": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "author": {
+            "type": "string",
+            "maxLength": 128
+          },
           "hooks": {
             "type": "array",
             "minItems": 1,
-            "items": { "type": "string", "enum": ["before_charge", "after_charge", "on_refund", "on_quota_exceeded"] }
+            "items": {
+              "type": "string",
+              "enum": [
+                "before_charge",
+                "after_charge",
+                "on_refund",
+                "on_quota_exceeded"
+              ]
+            }
           },
-          "source_url": { "type": "string", "format": "uri" }
+          "source_url": {
+            "type": "string",
+            "format": "uri"
+          }
         }
       },
       "PluginRecord": {
         "type": "object",
-        "required": ["manifest", "status", "created_at"],
+        "required": [
+          "manifest",
+          "status",
+          "created_at"
+        ],
         "properties": {
-          "manifest": { "$ref": "#/components/schemas/PluginManifest" },
-          "status": { "type": "string", "enum": ["available", "installed"] },
-          "installed_by": { "type": "string", "nullable": true },
-          "installed_at": { "type": "string", "nullable": true },
-          "created_at": { "type": "string" }
+          "manifest": {
+            "$ref": "#/components/schemas/PluginManifest"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "installed"
+            ]
+          },
+          "installed_by": {
+            "type": "string",
+            "nullable": true
+          },
+          "installed_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          }
         }
       },
       "BillingDeductRequest": {

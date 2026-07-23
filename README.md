@@ -37,6 +37,7 @@ See [docs/fee-abstraction.md](./docs/fee-abstraction.md) for full API reference,
 - Usage route: `GET /api/usage`
 - Live usage stream: `GET /api/usage/sse` for authenticated developer dashboards
 - Admin usage anomalies: `GET /api/admin/usage/anomalies` returns per-API daily usage anomalies (z-score spikes/drops) for admin review, filterable by `from`/`to`/`apiId`/`threshold`/`limit` (admin auth + IP allowlist)
+- Admin DB explain: `POST /api/admin/db/explain` runs `EXPLAIN (ANALYZE, FORMAT JSON)` on a read-only SQL query and returns the query plan for diagnostic use (admin auth + IP allowlist); see [docs/admin-db-explain.md](./docs/admin-db-explain.md)
 - Usage anomaly detector: background worker emits `usage.anomaly.detected` when per-developer 5-minute traffic exceeds a rolling 12-window baseline by a configurable multiplier (see `docs/usage-anomaly-detector.md`)
 - JSON body parsing plus gateway API key authentication for upstream proxy routes
 - Per-user global REST rate limiting for authenticated `/api/billing`, `/api/usage`, `/api/developers`, `/api/vault`, and `/api/keys` traffic, with IP fallback for unauthenticated requests
