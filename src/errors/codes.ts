@@ -189,6 +189,12 @@ export const ErrorCode = {
   /** Webhook signature verification failed */
   INVALID_WEBHOOK_SIGNATURE: "INVALID_WEBHOOK_SIGNATURE",
 
+  /** The delivery ID provided for webhook replay is missing or invalid */
+  INVALID_DELIVERY_ID: "INVALID_DELIVERY_ID",
+
+  /** No Dead-Letter Queue entry was found for the given delivery ID */
+  DLQ_ENTRY_NOT_FOUND: "DLQ_ENTRY_NOT_FOUND",
+
   /** IP address format is invalid */
   INVALID_IP_FORMAT: "INVALID_IP_FORMAT",
 
