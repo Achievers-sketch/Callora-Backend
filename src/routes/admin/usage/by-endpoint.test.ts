@@ -1,7 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import type { Pool, QueryResult } from 'pg';
-import { createAdminUsageByEndpointRouter } from './byEndpoint.js';
+import { createAdminUsageByEndpointRouter } from './by-endpoint.js';
 import { errorHandler } from '../../../middleware/errorHandler.js';
 import { requestIdMiddleware } from '../../../middleware/requestId.js';
 
