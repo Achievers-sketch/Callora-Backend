@@ -12,11 +12,13 @@
 
 import { Router } from 'express';
 import type { HealthCheckConfig, ComponentCheck } from '../../services/healthCheck.js';
-import { checkDatabase, checkSorobanRpc, checkHorizon } from '../../services/healthCheck.js';
+import { checkDatabase, checkSorobanRpc, checkHorizon, determineOverallStatus } from '../../services/healthCheck.js';
+import { InternalServerError } from '../../errors/index.js';
 import { logger } from '../../logger.js';
 
 /** Response body for the dependencies probe endpoint. */
 export interface DependencyProbeResponse {
+  status: 'ok' | 'degraded' | 'down';
   timestamp: string;
   dependencies: Record<string, ComponentCheck>;
 }
@@ -27,7 +29,7 @@ export interface DependencyProbeResponse {
  * Replaces raw internal error messages with safe categories to prevent
  * leaking connection strings, hostnames, or stack details.
  */
-function sanitizeCheck(check: ComponentCheck): ComponentCheck {
+export function sanitizeCheck(check: ComponentCheck): ComponentCheck {
   const sanitized: ComponentCheck = { status: check.status };
 
   if (check.responseTime !== undefined) {
@@ -38,7 +40,6 @@ function sanitizeCheck(check: ComponentCheck): ComponentCheck {
     if (check.error === 'Timeout' || check.error === 'Database check timeout') {
       sanitized.error = 'timeout';
     } else if (check.error.startsWith('HTTP ')) {
-      // "HTTP 503" — safe to expose
       sanitized.error = check.error;
     } else if (check.error === 'Unexpected query result') {
       sanitized.error = 'unexpected_response';
@@ -59,13 +60,14 @@ function sanitizeCheck(check: ComponentCheck): ComponentCheck {
 export function createDependenciesRouter(config?: HealthCheckConfig): Router {
   const router = Router();
 
-  router.get('/', async (req, res) => {
+  router.get('/', async (req, res, next) => {
     const requestId = req.id || 'unknown';
     logger.info('[health/dependencies] probe requested', { requestId });
 
     // No config → no dependencies to probe
     if (!config?.database) {
       const response: DependencyProbeResponse = {
+        status: 'ok',
         timestamp: new Date().toISOString(),
         dependencies: {},
       };
@@ -73,41 +75,56 @@ export function createDependenciesRouter(config?: HealthCheckConfig): Router {
       return;
     }
 
-    const dependencies: Record<string, ComponentCheck> = {};
+    try {
+      const dependencies: Record<string, ComponentCheck> = {};
 
-    // Run all probes in parallel for efficiency
-    const [dbCheck, sorobanCheck, horizonCheck] = await Promise.all([
-      checkDatabase(config.database.pool, config.database.timeout),
-      config.sorobanRpc
-        ? checkSorobanRpc(config.sorobanRpc.url, config.sorobanRpc.timeout)
-        : Promise.resolve(undefined),
-      config.horizon
-        ? checkHorizon(config.horizon.url, config.horizon.timeout)
-        : Promise.resolve(undefined),
-    ]);
+      const [dbCheck, sorobanCheck, horizonCheck] = await Promise.all([
+        checkDatabase(config.database.pool, config.database.timeout),
+        config.sorobanRpc
+          ? checkSorobanRpc(config.sorobanRpc.url, config.sorobanRpc.timeout)
+          : Promise.resolve(undefined),
+        config.horizon
+          ? checkHorizon(config.horizon.url, config.horizon.timeout)
+          : Promise.resolve(undefined),
+      ]);
 
-    dependencies.database = sanitizeCheck(dbCheck);
+      dependencies.database = sanitizeCheck(dbCheck);
 
-    if (sorobanCheck) {
-      dependencies.soroban_rpc = sanitizeCheck(sorobanCheck);
+      if (sorobanCheck) {
+        dependencies.soroban_rpc = sanitizeCheck(sorobanCheck);
+      }
+
+      if (horizonCheck) {
+        dependencies.horizon = sanitizeCheck(horizonCheck);
+      }
+
+      const overallStatus = determineOverallStatus({
+        api: 'ok',
+        database: dbCheck.status,
+        soroban_rpc: sorobanCheck?.status,
+        horizon: horizonCheck?.status,
+      });
+
+      logger.info('[health/dependencies] probe completed', {
+        requestId,
+        overallStatus,
+        statuses: Object.fromEntries(
+          Object.entries(dependencies).map(([k, v]) => [k, v.status]),
+        ),
+      });
+
+      const response: DependencyProbeResponse = {
+        status: overallStatus,
+        timestamp: new Date().toISOString(),
+        dependencies,
+      };
+
+      const statusCode = overallStatus === 'down' ? 503 : 200;
+      res.status(statusCode).json(response);
+    } catch (error) {
+      logger.error('[health/dependencies] probe failed', { requestId, error });
+      next(new InternalServerError());
     }
-
-    if (horizonCheck) {
-      dependencies.horizon = sanitizeCheck(horizonCheck);
-    }
-
-    logger.info('[health/dependencies] probe completed', {
-      requestId,
-      statuses: Object.fromEntries(
-        Object.entries(dependencies).map(([k, v]) => [k, v.status]),
-      ),
-    });
-
-    const response: DependencyProbeResponse = {
-      timestamp: new Date().toISOString(),
-      dependencies,
-    };
-    res.json(response);
   });
 
   return router;

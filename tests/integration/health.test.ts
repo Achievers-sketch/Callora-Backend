@@ -578,6 +578,7 @@ describe('GET /api/health/dependencies - Integration Tests', () => {
       const response = await request(app).get('/api/health/dependencies');
 
       assert.equal(response.status, 200);
+      assert.equal(response.body.status, 'ok');
       assert.ok(response.body.timestamp);
       assert.equal(response.body.dependencies.database.status, 'ok');
       assert.ok(typeof response.body.dependencies.database.responseTime === 'number');
@@ -604,7 +605,8 @@ describe('GET /api/health/dependencies - Integration Tests', () => {
     const app = createApp({ healthCheckConfig: config });
     const response = await request(app).get('/api/health/dependencies');
 
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 503);
+    assert.equal(response.body.status, 'down');
     assert.equal(response.body.dependencies.database.status, 'down');
     assert.equal(response.body.dependencies.database.error, 'unavailable');
     assert.ok(!JSON.stringify(response.body).includes('secret'));
@@ -637,6 +639,7 @@ describe('GET /api/health/dependencies - Integration Tests', () => {
       const response = await request(app).get('/api/health/dependencies');
 
       assert.equal(response.status, 200);
+      assert.equal(response.body.status, 'degraded');
       assert.equal(response.body.dependencies.database.status, 'ok');
       assert.equal(response.body.dependencies.soroban_rpc.status, 'down');
       assert.equal(response.body.dependencies.soroban_rpc.error, 'unavailable');
@@ -661,6 +664,7 @@ describe('GET /api/health/dependencies - Integration Tests', () => {
       const response = await request(app).get('/api/health/dependencies');
 
       assert.equal(response.status, 200);
+      assert.equal(response.body.status, 'ok');
       assert.equal(response.body.dependencies.database.status, 'ok');
       assert.equal(response.body.dependencies.soroban_rpc, undefined);
       assert.equal(response.body.dependencies.horizon, undefined);
@@ -674,6 +678,7 @@ describe('GET /api/health/dependencies - Integration Tests', () => {
     const response = await request(app).get('/api/health/dependencies');
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.status, 'ok');
     assert.ok(response.body.timestamp);
     assert.deepEqual(response.body.dependencies, {});
   });
