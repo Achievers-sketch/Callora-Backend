@@ -31,6 +31,27 @@ Business rules:
 
 The migration is in `migrations/0018_subscriptions.sql`.
 
+## Dispute Resolution Endpoints
+
+Developers can open and track disputes against failed or incorrect billing deductions. Admins review and resolve disputes.
+
+**Developer routes** (`requireAuth`):
+
+- `POST /api/billing/disputes` — open a new dispute (`usage_event_id` and `reason` required); returns `201` with the new dispute object. Returns `409` if a dispute for that `usage_event_id` already exists.
+- `GET /api/billing/disputes` — list all disputes opened by the authenticated developer.
+- `GET /api/billing/disputes/:id` — get a single dispute plus its full audit-event trail. Returns `403` if the dispute belongs to another developer, `404` if not found.
+
+**Admin routes** (`adminAuth`):
+
+- `GET /api/billing/disputes/admin/all` — list every dispute across all developers.
+- `POST /api/billing/disputes/:id/resolve` — resolve a dispute. Body: `{ "resolution": "REFUNDED" | "UPHELD", "notes"?: string }`. Returns `404` for unknown disputes, `409` if already resolved.
+
+**State machine**: `OPEN → REFUNDED` (admin grants refund) or `OPEN → UPHELD` (admin upholds the charge).
+
+Every state transition is appended to the `dispute_events` audit trail, which is returned alongside the dispute on `GET /api/billing/disputes/:id`.
+
+The migration is in `migrations/0019_disputes.sql` (rollback: `migrations/0019_disputes.down.sql`).
+
 ## Developer Profile Endpoints
 
 - `GET /api/developers/me` returns the authenticated developer profile and auto-creates a blank profile row on first access.

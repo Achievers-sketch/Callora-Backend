@@ -11,8 +11,12 @@
         "summary": "Grant GrantFox FWC26 prepaid credits",
         "description": "Adds prepaid USDC credits to a user account for the GrantFox FWC26 campaign. Requires admin authentication and the admin IP allowlist.",
         "security": [
-          { "adminApiKey": [] },
-          { "bearerAuth": [] }
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
         ],
         "requestBody": {
           "required": true,
@@ -21,13 +25,27 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["user_id", "amount_usdc"],
+                "required": [
+                  "user_id",
+                  "amount_usdc"
+                ],
                 "properties": {
-                  "user_id": { "type": "string", "minLength": 1, "maxLength": 255 },
-                  "amount_usdc": { "type": "string", "pattern": "^\\d+(?:\\.\\d{1,7})?$", "description": "Positive USDC amount with at most seven fractional digits" }
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "amount_usdc": {
+                    "type": "string",
+                    "pattern": "^\\d+(?:\\.\\d{1,7})?$",
+                    "description": "Positive USDC amount with at most seven fractional digits"
+                  }
                 }
               },
-              "example": { "user_id": "user_123", "amount_usdc": "25.50" }
+              "example": {
+                "user_id": "user_123",
+                "amount_usdc": "25.50"
+              }
             }
           }
         },
@@ -41,13 +59,31 @@
                   "properties": {
                     "data": {
                       "type": "object",
-                      "required": ["user_id", "amount_usdc", "balance_usdc", "campaign", "updated_at"],
+                      "required": [
+                        "user_id",
+                        "amount_usdc",
+                        "balance_usdc",
+                        "campaign",
+                        "updated_at"
+                      ],
                       "properties": {
-                        "user_id": { "type": "string" },
-                        "amount_usdc": { "type": "string" },
-                        "balance_usdc": { "type": "string" },
-                        "campaign": { "type": "string", "example": "GrantFox FWC26" },
-                        "updated_at": { "type": "string", "format": "date-time" }
+                        "user_id": {
+                          "type": "string"
+                        },
+                        "amount_usdc": {
+                          "type": "string"
+                        },
+                        "balance_usdc": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": "string",
+                          "example": "GrantFox FWC26"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
                       }
                     }
                   }
@@ -55,16 +91,22 @@
               }
             }
           },
-          "400": { "description": "Invalid grant request" },
-          "401": { "description": "Unauthorized admin request" },
-          "403": { "description": "Forbidden by admin IP allowlist" }
+          "400": {
+            "description": "Invalid grant request"
+          },
+          "401": {
+            "description": "Unauthorized admin request"
+          },
+          "403": {
+            "description": "Forbidden by admin IP allowlist"
+          }
         }
       }
     },
     "/api/gateway/health/{apiSlug}": {
       "get": {
         "summary": "Get gateway health for an API",
-        "description": "Returns aggregated upstream latency percentiles and circuit breaker state for a given API slug. Public endpoint — no authentication required. Only aggregated metrics are returned; no tenant identifiers or raw histogram data are exposed. Results are cached in-memory for 5 seconds.",
+        "description": "Returns aggregated upstream latency percentiles and circuit breaker state for a given API slug. Public endpoint \u2014 no authentication required. Only aggregated metrics are returned; no tenant identifiers or raw histogram data are exposed. Results are cached in-memory for 5 seconds.",
         "parameters": [
           {
             "name": "apiSlug",
@@ -582,7 +624,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized — missing or invalid bearer token.",
+            "description": "Unauthorized \u2014 missing or invalid bearer token.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1331,7 +1373,7 @@
         },
         "responses": {
           "201": {
-            "description": "Endpoints registered successfully — per-row details returned",
+            "description": "Endpoints registered successfully \u2014 per-row details returned",
             "content": {
               "application/json": {
                 "schema": {
@@ -1341,7 +1383,7 @@
             }
           },
           "400": {
-            "description": "Validation error — invalid endpoint data, empty array, or too many endpoints",
+            "description": "Validation error \u2014 invalid endpoint data, empty array, or too many endpoints",
             "content": {
               "application/json": {
                 "schema": {
@@ -1715,6 +1757,260 @@
           }
         }
       }
+    },
+    "/api/billing/disputes": {
+      "post": {
+        "summary": "Open a dispute",
+        "description": "Developer opens a dispute against a billing charge (usage event). One open dispute is allowed per usage_event_id.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenDisputeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Dispute opened successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dispute"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Dispute already exists for this usage_event_id"
+          }
+        }
+      },
+      "get": {
+        "summary": "List own disputes",
+        "description": "Returns all disputes opened by the authenticated developer.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of disputes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "disputes",
+                    "total"
+                  ],
+                  "properties": {
+                    "disputes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Dispute"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/billing/disputes/{id}": {
+      "get": {
+        "summary": "Get own dispute with audit trail",
+        "description": "Returns a single dispute and its full audit event trail. Only the dispute owner may access it.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dispute with events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "dispute",
+                    "events"
+                  ],
+                  "properties": {
+                    "dispute": {
+                      "$ref": "#/components/schemas/Dispute"
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DisputeEvent"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden: dispute belongs to another user"
+          },
+          "404": {
+            "description": "Dispute not found"
+          }
+        }
+      }
+    },
+    "/api/billing/disputes/{id}/resolve": {
+      "post": {
+        "summary": "Resolve a dispute (admin)",
+        "description": "Admin resolves an open dispute as REFUNDED or UPHELD. Requires admin authentication.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDisputeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dispute resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dispute"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Admin authentication required"
+          },
+          "404": {
+            "description": "Dispute not found"
+          },
+          "409": {
+            "description": "Dispute already resolved"
+          }
+        }
+      }
+    },
+    "/api/billing/disputes/admin/all": {
+      "get": {
+        "summary": "List all disputes (admin)",
+        "description": "Admin endpoint to list every dispute in the system.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All disputes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "disputes",
+                    "total"
+                  ],
+                  "properties": {
+                    "disputes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Dispute"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1886,7 +2182,7 @@
             "type": "string",
             "minLength": 10,
             "maxLength": 1000,
-            "description": "Justification for the upgrade (10–1000 characters)"
+            "description": "Justification for the upgrade (10\u20131000 characters)"
           },
           "requested_overrides": {
             "type": "object",
@@ -3031,6 +3327,121 @@
           "EXPORT_SCHEDULE_NOT_FOUND"
         ],
         "description": "Canonical Callora backend error code."
+      },
+      "Dispute": {
+        "type": "object",
+        "required": [
+          "id",
+          "usage_event_id",
+          "opened_by",
+          "reason",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "usage_event_id": {
+            "type": "string"
+          },
+          "opened_by": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "REFUNDED",
+              "UPHELD"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resolved_by": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "DisputeEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "dispute_id",
+          "actor",
+          "action",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "dispute_id": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OpenDisputeRequest": {
+        "type": "object",
+        "required": [
+          "usage_event_id",
+          "reason"
+        ],
+        "properties": {
+          "usage_event_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      },
+      "ResolveDisputeRequest": {
+        "type": "object",
+        "required": [
+          "resolution"
+        ],
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "REFUNDED",
+              "UPHELD"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
       }
     }
   }
