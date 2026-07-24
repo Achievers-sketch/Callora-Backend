@@ -333,7 +333,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["day", "week", "month"]
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ]
             }
           }
         ],
@@ -637,7 +641,10 @@
                               },
                               "type": {
                                 "type": "string",
-                                "enum": ["spike", "drop"]
+                                "enum": [
+                                  "spike",
+                                  "drop"
+                                ]
                               },
                               "calls": {
                                 "type": "integer"
@@ -2209,6 +2216,399 @@
           }
         }
       }
+    },
+    "/api/subscriptions": {
+      "post": {
+        "summary": "Subscribe to a marketplace API",
+        "description": "Subscribes the authenticated user to a marketplace API with optional metering preferences. Each user can hold at most one non-cancelled subscription per API.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "api_id"
+                ],
+                "properties": {
+                  "api_id": {
+                    "type": "integer",
+                    "description": "ID of the marketplace API to subscribe to"
+                  },
+                  "metering_limit": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Maximum calls per calendar month. Omit or set null for unlimited."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subscription created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cannot subscribe to own API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "API not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Subscription already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List subscriptions",
+        "description": "Returns all subscriptions for the authenticated user, optionally filtered by status.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "paused",
+                "cancelled"
+              ]
+            },
+            "description": "Filter subscriptions by status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of subscriptions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Subscription"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/subscriptions/{id}": {
+      "get": {
+        "summary": "Get a subscription",
+        "description": "Returns a single subscription belonging to the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a subscription",
+        "description": "Updates the status (pause/resume) or metering_limit for the authenticated user's subscription.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused"
+                    ]
+                  },
+                  "metering_limit": {
+                    "type": "integer",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or subscription is cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Cancel a subscription",
+        "description": "Cancels the authenticated user's subscription (soft-delete; sets status to 'cancelled').",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Subscription is already cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2225,6 +2625,59 @@
       }
     },
     "schemas": {
+      "Subscription": {
+        "type": "object",
+        "description": "A user's subscription to a marketplace API.",
+        "required": [
+          "id",
+          "user_id",
+          "api_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Subscription UUID"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "ID of the subscribing user"
+          },
+          "api_id": {
+            "type": "integer",
+            "description": "ID of the subscribed API"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "cancelled"
+            ],
+            "description": "Current subscription status"
+          },
+          "metering_limit": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Maximum calls per calendar month; null means unlimited"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cancelled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
       "QuotaRequest": {
         "type": "object",
         "description": "A developer quota increase request and its current resolution state.",
@@ -2488,7 +2941,11 @@
       },
       "BillingBulkDeductEntry": {
         "type": "object",
-        "required": ["events", "stats", "period"],
+        "required": [
+          "events",
+          "stats",
+          "period"
+        ],
         "properties": {
           "requestId": {
             "type": "string"
@@ -2510,7 +2967,9 @@
       },
       "BillingBulkDeductRequest": {
         "type": "object",
-        "required": ["entries"],
+        "required": [
+          "entries"
+        ],
         "properties": {
           "entries": {
             "type": "array",
@@ -2590,13 +3049,23 @@
       },
       "UsageResponse": {
         "type": "object",
-        "required": ["events", "stats", "period"],
+        "required": [
+          "events",
+          "stats",
+          "period"
+        ],
         "properties": {
           "events": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["id", "apiId", "endpoint", "occurredAt", "revenue"],
+              "required": [
+                "id",
+                "apiId",
+                "endpoint",
+                "occurredAt",
+                "revenue"
+              ],
               "properties": {
                 "id": {
                   "type": "string"
@@ -2619,7 +3088,11 @@
           },
           "stats": {
             "type": "object",
-            "required": ["totalCalls", "totalSpent", "breakdownByApi"],
+            "required": [
+              "totalCalls",
+              "totalSpent",
+              "breakdownByApi"
+            ],
             "properties": {
               "totalCalls": {
                 "type": "integer"
@@ -2631,7 +3104,11 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["apiId", "calls", "revenue"],
+                  "required": [
+                    "apiId",
+                    "calls",
+                    "revenue"
+                  ],
                   "properties": {
                     "apiId": {
                       "type": "string"
@@ -2649,7 +3126,11 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["period", "calls", "revenue"],
+                  "required": [
+                    "period",
+                    "calls",
+                    "revenue"
+                  ],
                   "properties": {
                     "period": {
                       "type": "string"
@@ -2667,7 +3148,10 @@
           },
           "period": {
             "type": "object",
-            "required": ["from", "to"],
+            "required": [
+              "from",
+              "to"
+            ],
             "properties": {
               "from": {
                 "type": "string",
@@ -2726,11 +3210,17 @@
             "type": "integer"
           },
           "firstEventAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "lastEventAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "statusCodes": {
@@ -2743,7 +3233,9 @@
       },
       "AdminUsageSnapshotResponse": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/AdminUsageSnapshot"
@@ -2752,11 +3244,17 @@
       },
       "AdminUsageResetResponse": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
-            "required": ["developerId", "reset", "priorValues"],
+            "required": [
+              "developerId",
+              "reset",
+              "priorValues"
+            ],
             "properties": {
               "developerId": {
                 "type": "string"
@@ -2773,7 +3271,10 @@
       },
       "ApisListResponse": {
         "type": "object",
-        "required": ["data", "pagination"],
+        "required": [
+          "data",
+          "pagination"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -2783,7 +3284,11 @@
           },
           "pagination": {
             "type": "object",
-            "required": ["limit", "offset", "total"],
+            "required": [
+              "limit",
+              "offset",
+              "total"
+            ],
             "properties": {
               "limit": {
                 "type": "integer"
@@ -2800,7 +3305,12 @@
       },
       "ApiCreateRequest": {
         "type": "object",
-        "required": ["name", "base_url", "category", "endpoints"],
+        "required": [
+          "name",
+          "base_url",
+          "category",
+          "endpoints"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -2818,7 +3328,11 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["path", "method", "price_per_call_usdc"],
+              "required": [
+                "path",
+                "method",
+                "price_per_call_usdc"
+              ],
               "properties": {
                 "path": {
                   "type": "string"
@@ -2925,7 +3439,9 @@
       },
       "BulkEndpointRegistrationRequest": {
         "type": "object",
-        "required": ["endpoints"],
+        "required": [
+          "endpoints"
+        ],
         "properties": {
           "endpoints": {
             "type": "array",
@@ -2933,7 +3449,11 @@
             "maxItems": 50,
             "items": {
               "type": "object",
-              "required": ["path", "method", "price_per_call_usdc"],
+              "required": [
+                "path",
+                "method",
+                "price_per_call_usdc"
+              ],
               "properties": {
                 "path": {
                   "type": "string",
@@ -2966,7 +3486,9 @@
       },
       "BulkEndpointRegistrationResponse": {
         "type": "object",
-        "required": ["endpoints"],
+        "required": [
+          "endpoints"
+        ],
         "properties": {
           "endpoints": {
             "type": "array",
@@ -3043,7 +3565,10 @@
           },
           "developer": {
             "type": "object",
-            "required": ["id", "name"],
+            "required": [
+              "id",
+              "name"
+            ],
             "properties": {
               "id": {
                 "type": "integer"
@@ -3091,11 +3616,19 @@
       },
       "DeveloperRevenueResponse": {
         "type": "object",
-        "required": ["summary", "settlements", "pagination"],
+        "required": [
+          "summary",
+          "settlements",
+          "pagination"
+        ],
         "properties": {
           "summary": {
             "type": "object",
-            "required": ["total_earned", "pending", "available_to_withdraw"],
+            "required": [
+              "total_earned",
+              "pending",
+              "available_to_withdraw"
+            ],
             "properties": {
               "total_earned": {
                 "type": "number"
@@ -3145,7 +3678,11 @@
           },
           "pagination": {
             "type": "object",
-            "required": ["limit", "offset", "total"],
+            "required": [
+              "limit",
+              "offset",
+              "total"
+            ],
             "properties": {
               "limit": {
                 "type": "integer"
@@ -3194,7 +3731,10 @@
       },
       "DeveloperApiKeysResponse": {
         "type": "object",
-        "required": ["data", "meta"],
+        "required": [
+          "data",
+          "meta"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -3204,7 +3744,11 @@
           },
           "meta": {
             "type": "object",
-            "required": ["limit", "nextCursor", "hasMore"],
+            "required": [
+              "limit",
+              "nextCursor",
+              "hasMore"
+            ],
             "properties": {
               "limit": {
                 "type": "integer"
@@ -3222,14 +3766,21 @@
       },
       "GatewayHealthResponse": {
         "type": "object",
-        "required": ["apiSlug", "latency", "breaker"],
+        "required": [
+          "apiSlug",
+          "latency",
+          "breaker"
+        ],
         "properties": {
           "apiSlug": {
             "type": "string"
           },
           "latency": {
             "type": "object",
-            "required": ["p50", "p95"],
+            "required": [
+              "p50",
+              "p95"
+            ],
             "properties": {
               "p50": {
                 "type": "number",
@@ -3245,11 +3796,17 @@
           },
           "breaker": {
             "type": "object",
-            "required": ["state"],
+            "required": [
+              "state"
+            ],
             "properties": {
               "state": {
                 "type": "string",
-                "enum": ["closed", "open", "half-open"]
+                "enum": [
+                  "closed",
+                  "open",
+                  "half-open"
+                ]
               }
             }
           }
@@ -3257,7 +3814,11 @@
       },
       "ErrorResponse": {
         "type": "object",
-        "required": ["code", "message", "requestId"],
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
         "properties": {
           "code": {
             "$ref": "#/components/schemas/ErrorCode"
