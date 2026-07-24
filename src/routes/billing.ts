@@ -10,24 +10,16 @@ import {
   NotFoundError,
   PaymentRequiredError,
   UnauthorizedError,
-} from "../errors/index.js";
-import {
-  requireAuth,
-  type AuthenticatedLocals,
-} from "../middleware/requireAuth.js";
-import { idempotencyMiddleware } from "../middleware/idempotency.js";
-import { billingDeductHistogramMiddleware } from "../middleware/metricsHistogram.js";
-import {
-  BillingService,
-  type BillingDeductResult,
-} from "../services/billing.js";
-import {
-  createSorobanRpcBillingClient,
-  SorobanRpcError,
-} from "../services/sorobanBilling.js";
-import { redactSimulationDetails } from "../lib/simulationDiagnostics.js";
-import creditsRouter from "./billing/credits.js";
-import disputesRouter from "./billing/disputes.js";
+} from '../errors/index.js';
+import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
+import { idempotencyMiddleware } from '../middleware/idempotency.js';
+import { billingDeductHistogramMiddleware } from '../middleware/metricsHistogram.js';
+import { BillingService, type BillingDeductResult } from '../services/billing.js';
+import { createSorobanRpcBillingClient, SorobanRpcError } from '../services/sorobanBilling.js';
+import { redactSimulationDetails } from '../lib/simulationDiagnostics.js';
+import creditsRouter from './billing/credits.js';
+import disputesRouter from './billing/disputes.js';
+import bulkDeductRouter from './billing/deduct/bulk.js';
 
 const router = Router();
 
@@ -37,6 +29,9 @@ router.use(billingAccessLogMiddleware);
 router.use("/credits", creditsRouter);
 // Mount disputes sub-router
 router.use("/disputes", disputesRouter);
+
+// Mount bulk-deduct sub-router
+router.use('/deduct/bulk', bulkDeductRouter);
 
 // Mount fee-abstraction sub-router
 router.use("/fee-abstraction", createFeeAbstractionRouter());
