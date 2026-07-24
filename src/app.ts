@@ -5,7 +5,7 @@ import { z } from 'zod';
 import adminRouter from './routes/admin.js';
 import { createExplainRouter } from './routes/admin/explain.js';
 import { createUsageAnomaliesRouter } from './routes/admin/usage/anomalies.js';
-import { createSpikeDetectorRouter } from './routes/admin/usage/spikeDetector.js';
+import { createAdminUsageExportRouter } from './routes/admin/usage/export.js';
 import { createApiRouter } from './routes/index.js';
 import { createApisRouter } from './routes/apis.js';
 import { createPluginsRouter } from './routes/marketplace/plugins.js';
@@ -290,7 +290,8 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   // Mounted before the generic admin router so the specific path is not
   // shadowed by adminRouter's `/usage/:developerId` route.
   app.use('/api/admin/usage/anomalies', createUsageAnomaliesRouter({ pool }));
-  app.use('/api/admin/usage/spike-detector', createSpikeDetectorRouter({ pool }));
+  app.use('/api/admin/usage/export', createAdminUsageExportRouter({ pool }));
+  app.use('/api/admin', adminRouter);
   app.use('/api/admin/db/explain', createExplainRouter({ pool }));
 
   // Quota self-service — developers submit requests, admins manage via /api/admin/quota/requests
