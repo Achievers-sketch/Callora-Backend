@@ -22,6 +22,7 @@ const openApiSpec = JSON.parse(readFileSync(openApiPath, 'utf8'));
 export interface ApiRouterDeps extends Partial<UsageRouterDeps>, Partial<ApisRouterDeps> {
   restRateLimit?: RequestHandler;
   restRateLimiter?: InMemoryRestRateLimiter;
+  perDevConcurrency?: RequestHandler;
   scheduledExportsService?: ScheduledExportsService;
 }
 
@@ -52,9 +53,21 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
     router.use('/exports/schedules', createExportSchedulesRouter(deps.scheduledExportsService));
   }
 
+  // Per-developer concurrency middleware for billing routes — applied BEFORE
+  // the rate limiter so concurrency rejections are fast-fail and don't consume
+  // rate-limit budget.
+  const billingConcurrency = deps.perDevConcurrency;
+  const billingMiddlewares: RequestHandler[] = [];
+  if (billingConcurrency) {
+    billingMiddlewares.push(billingConcurrency);
+  }
   if (deps.restRateLimit) {
-    router.use('/billing', deps.restRateLimit, billingRouter);
-    router.use('/billing/portal', deps.restRateLimit, createBillingPortalRouter());
+    billingMiddlewares.push(deps.restRateLimit);
+  }
+
+  if (billingMiddlewares.length > 0) {
+    router.use('/billing', ...billingMiddlewares, billingRouter);
+    router.use('/billing/portal', ...billingMiddlewares, createBillingPortalRouter());
   } else {
     router.use('/billing', billingRouter);
     router.use('/billing/portal', createBillingPortalRouter());

@@ -45,6 +45,7 @@ import { validate } from './middleware/validate.js';
 import { createAccessLogMiddleware, requestLogger } from './middleware/accessLog.js';
 import { InMemoryRestRateLimiter, createRestRateLimitMiddleware } from './middleware/restRateLimit.js';
 import type { RestRateLimitOptions } from './middleware/restRateLimit.js';
+import { createPerDevConcurrencyMiddleware } from './middleware/perDevConcurrency.js';
 import { auditEnrichMiddleware } from './middleware/auditEnrich.js';
 import { metricsMiddleware, metricsEndpoint } from './metrics.js';
 import { config } from './config/index.js';
@@ -101,6 +102,10 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   };
   const restRateLimiter = new InMemoryRestRateLimiter(restRateLimitOptions.windowMs, restRateLimitOptions.maxRequests);
   const restRateLimit = createRestRateLimitMiddleware(restRateLimitOptions, restRateLimiter);
+  const perDevConcurrency = createPerDevConcurrencyMiddleware({
+    maxConcurrent: config.billingConcurrency.maxPerDeveloper,
+    ttlMs: config.billingConcurrency.semaphoreTtlMs,
+  });
   // Set database pool in locals for billing routes
   app.locals.dbPool = pool;
   const usageEventsRepository =
@@ -308,6 +313,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   app.use('/api', createApiRouter({
     restRateLimit,
     restRateLimiter,
+    perDevConcurrency,
     usageEventsRepository,
     apiRepository,
     developerRepository
