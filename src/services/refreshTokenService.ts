@@ -236,10 +236,7 @@ export class RefreshTokenService {
    *      leaving the victim holding a now-revoked token.
    *   b) The attacker's rotated token was stolen back by the legitimate user.
    *
-   * In either case we cannot tell who is legitimate, so the safest response
-   * is to revoke ALL tokens for the user, forcing a full re-authentication.
-   * Revoking only the family is insufficient because an attacker who has
-   * already rotated the token may have started a new family.
+   * In this case, we revoke the specific token family to invalidate the lineage.
    *
    * @param storedToken - The revoked token record that was presented again
    * @param repository  - Token repository for persistence
@@ -254,8 +251,7 @@ export class RefreshTokenService {
       }
     );
 
-    // Revoke every token for this user, not just the family, because the
-    // attacker may have rotated into a new family after the initial theft.
-    await repository.revokeAllUserTokens(storedToken.userId);
+    // Revoke the specific token family to terminate the stolen token lineage.
+    await repository.revokeFamily(storedToken.familyId, storedToken.userId);
   }
 }

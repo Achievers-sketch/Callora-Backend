@@ -219,4 +219,23 @@ describe('RefreshTokenService', () => {
       expect(hash1).not.toBe(hash2);
     });
   });
+  describe('handleReuse', () => {
+    it('should revoke the token family instead of all user tokens', async () => {
+      const storedToken = {
+        id: 'token-123',
+        userId: 'user-456',
+        familyId: 'family-789',
+      } as any;
+
+      const repository = {
+        revokeFamily: jest.fn().mockResolvedValue(undefined),
+        revokeAllUserTokens: jest.fn().mockResolvedValue(undefined),
+      } as any;
+
+      await service.handleReuse(storedToken, repository);
+
+      expect(repository.revokeFamily).toHaveBeenCalledWith('family-789', 'user-456');
+      expect(repository.revokeAllUserTokens).not.toHaveBeenCalled();
+    });
+  });
 });
