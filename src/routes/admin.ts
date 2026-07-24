@@ -227,4 +227,11 @@ router.use('/health/probes', createAdminHealthProbesRouter());
 // ---------------------------------------------------------------------------
 router.use('/billing/credits', createAdminCreditGrantsRouter());
 
+// ---------------------------------------------------------------------------
+// Maintenance banner
+// Mount: POST /api/admin/maintenance/banner
+// ---------------------------------------------------------------------------
+import { createMaintenanceBannerRouter } from './admin/maintenance/banner.js';
+router.use('/maintenance/banner', createMaintenanceBannerRouter());
+
 export default router;
