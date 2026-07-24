@@ -27,6 +27,7 @@ import {
   type DeveloperRepository,
   findByUserId,
 } from './repositories/developerRepository.js';
+import { defaultSubscriptionRepository } from './repositories/subscriptionRepository.js';
 import { apiStatusEnum, type ApiStatus, httpMethodEnum } from './db/schema.js';
 import type { Developer } from './db/schema.js';
 import { requireAuth, type AuthenticatedLocals } from './middleware/requireAuth.js';
@@ -318,7 +319,8 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
     perDevConcurrency,
     usageEventsRepository,
     apiRepository,
-    developerRepository
+    developerRepository,
+    subscriptionRepository: defaultSubscriptionRepository,
   }));
 
   app.get('/api/developers/apis', requireAuth, async (req, res: express.Response<unknown, AuthenticatedLocals>, next) => {

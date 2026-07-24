@@ -15,6 +15,10 @@ import { createUsageCsvRouter } from './usage/csv.js';
 import { createUsageByEndpointRouter } from './usage/byEndpoint.js';
 import { createExportSchedulesRouter } from './exports/schedules.js';
 import type { ScheduledExportsService } from '../services/scheduledExports.js';
+import { createSubscriptionRouter } from './subscriptionRoutes.js';
+import type { SubscriptionRepository } from '../repositories/subscriptionRepository.js';
+import type { DeveloperRepository } from '../repositories/developerRepository.js';
+import type { ApiRepository } from '../repositories/apiRepository.js';
 
 const openApiPath = path.join(process.cwd(), 'docs/openapi.json');
 const openApiSpec = JSON.parse(readFileSync(openApiPath, 'utf8'));
@@ -24,6 +28,9 @@ export interface ApiRouterDeps extends Partial<UsageRouterDeps>, Partial<ApisRou
   restRateLimiter?: InMemoryRestRateLimiter;
   perDevConcurrency?: RequestHandler;
   scheduledExportsService?: ScheduledExportsService;
+  subscriptionRepository?: SubscriptionRepository;
+  developerRepository?: DeveloperRepository;
+  apiRepository?: ApiRepository;
 }
 
 export function createApiRouter(deps: ApiRouterDeps = {}): Router {
@@ -51,6 +58,18 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
 
   if (deps.scheduledExportsService) {
     router.use('/exports/schedules', createExportSchedulesRouter(deps.scheduledExportsService));
+  }
+
+  // Subscriptions — developers subscribe to marketplace APIs with metering preferences.
+  if (deps.subscriptionRepository && deps.apiRepository && deps.developerRepository) {
+    router.use(
+      '/subscriptions',
+      createSubscriptionRouter({
+        subscriptionRepository: deps.subscriptionRepository,
+        apiRepository: deps.apiRepository,
+        developerRepository: deps.developerRepository,
+      }),
+    );
   }
 
   // Per-developer concurrency middleware for billing routes — applied BEFORE

@@ -108,3 +108,31 @@ export const quotaRequests = sqliteTable('quota_requests', {
 
 export type QuotaRequestRow = typeof quotaRequests.$inferSelect;
 export type NewQuotaRequestRow = typeof quotaRequests.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Subscriptions — per-user subscriptions to marketplace APIs
+// ---------------------------------------------------------------------------
+
+export const subscriptionStatusEnum = ['active', 'paused', 'cancelled'] as const;
+export type SubscriptionStatus = (typeof subscriptionStatusEnum)[number];
+
+export const subscriptions = sqliteTable('subscriptions', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  api_id: integer('api_id')
+    .notNull()
+    .references(() => apis.id, { onDelete: 'cascade' }),
+  status: text('status', { enum: subscriptionStatusEnum }).notNull().default('active'),
+  /** Maximum calls per calendar month. NULL means unlimited. */
+  metering_limit: integer('metering_limit'),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  updated_at: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  cancelled_at: integer('cancelled_at', { mode: 'timestamp' }),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type NewSubscription = typeof subscriptions.$inferInsert;

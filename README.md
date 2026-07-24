@@ -13,6 +13,24 @@ Requires `FEE_BUMPER_SECRET_KEY` environment variable (Stellar secret key `S...`
 
 See [docs/fee-abstraction.md](./docs/fee-abstraction.md) for full API reference, security considerations, rate limits, and emitted events.
 
+## Subscription Endpoints
+
+Authenticated users can subscribe to marketplace APIs with optional metering preferences.
+
+- `POST /api/subscriptions` — subscribe to an API (`api_id` required; optional `metering_limit` as max calls/month)
+- `GET /api/subscriptions` — list subscriptions for the authenticated user; filter by `?status=active|paused|cancelled`
+- `GET /api/subscriptions/:id` — get a single subscription (must belong to the authenticated user)
+- `PATCH /api/subscriptions/:id` — update `status` (`active`/`paused`) or `metering_limit`; body must include at least one field
+- `DELETE /api/subscriptions/:id` — cancel a subscription (soft-delete; sets status to `cancelled`)
+
+Business rules:
+- A user cannot subscribe to their own API (returns `403`).
+- Only one non-cancelled subscription is allowed per user/API pair (returns `409` on conflict).
+- Soft-deleted (deleted) APIs cannot be subscribed to (returns `404`).
+- Cancelled subscriptions cannot be modified or re-cancelled (returns `400`).
+
+The migration is in `migrations/0018_subscriptions.sql`.
+
 ## Developer Profile Endpoints
 
 - `GET /api/developers/me` returns the authenticated developer profile and auto-creates a blank profile row on first access.
