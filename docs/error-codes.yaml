@@ -259,6 +259,14 @@ error_codes:
     section: Webhooks
     description: Webhook signature verification failed
 
+  - code: INVALID_DELIVERY_ID
+    section: Webhooks
+    description: The delivery ID provided for webhook replay is missing or invalid
+
+  - code: DLQ_ENTRY_NOT_FOUND
+    section: Webhooks
+    description: No Dead-Letter Queue entry was found for the given delivery ID
+
   # IP allowlist
   - code: INVALID_IP_FORMAT
     section: IP allowlist

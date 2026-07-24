@@ -72,6 +72,8 @@ This section is generated from `docs/error-codes.yaml`. Run `npm run error-codes
 | `WEBHOOK_TIMESTAMP_OUT_OF_WINDOW` | Webhooks |
 | `MALFORMED_WEBHOOK_SIGNATURE` | Webhooks |
 | `INVALID_WEBHOOK_SIGNATURE` | Webhooks |
+| `INVALID_DELIVERY_ID` | Webhooks |
+| `DLQ_ENTRY_NOT_FOUND` | Webhooks |
 | `INVALID_IP_FORMAT` | IP allowlist |
 | `IP_NOT_ALLOWED` | IP allowlist |
 | `DATABASE_NOT_AVAILABLE` | DB / infrastructure |
