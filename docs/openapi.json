@@ -6,6 +6,61 @@
     "description": "API contract covering Callora backend billing, usage, and developer routes."
   },
   "paths": {
+    "/api/admin/billing/credits/grant": {
+      "post": {
+        "summary": "Grant GrantFox FWC26 prepaid credits",
+        "description": "Adds prepaid USDC credits to a user account for the GrantFox FWC26 campaign. Requires admin authentication and the admin IP allowlist.",
+        "security": [
+          { "adminApiKey": [] },
+          { "bearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["user_id", "amount_usdc"],
+                "properties": {
+                  "user_id": { "type": "string", "minLength": 1, "maxLength": 255 },
+                  "amount_usdc": { "type": "string", "pattern": "^\\d+(?:\\.\\d{1,7})?$", "description": "Positive USDC amount with at most seven fractional digits" }
+                }
+              },
+              "example": { "user_id": "user_123", "amount_usdc": "25.50" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Credits granted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": ["user_id", "amount_usdc", "balance_usdc", "campaign", "updated_at"],
+                      "properties": {
+                        "user_id": { "type": "string" },
+                        "amount_usdc": { "type": "string" },
+                        "balance_usdc": { "type": "string" },
+                        "campaign": { "type": "string", "example": "GrantFox FWC26" },
+                        "updated_at": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid grant request" },
+          "401": { "description": "Unauthorized admin request" },
+          "403": { "description": "Forbidden by admin IP allowlist" }
+        }
+      }
+    },
     "/api/gateway/health/{apiSlug}": {
       "get": {
         "summary": "Get gateway health for an API",
