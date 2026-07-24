@@ -18,6 +18,7 @@ import { createAdminWebhooksRouter } from './admin/webhooks.js';
 import { createAdminApisRouter } from './admin/apis.js';
 import { createAdminHealthProbesRouter } from './admin/health/probes.js';
 import { createAdminCreditGrantsRouter } from './admin/billing/credits/grant.js';
+import { createAdminUsageExportRouter } from './admin/usage/export.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 const usageStore: UsageAdminStore = createUsageStore();
@@ -62,6 +63,8 @@ router.get('/users', async (req, res, next) => {
     next(new InternalServerError());
   }
 });
+
+router.use('/usage/export', createAdminUsageExportRouter());
 
 router.get('/usage/:developerId', async (req, res: Response, next) => {
   try {

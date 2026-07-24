@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import type { Pool, QueryResult } from 'pg';
+import adminRouter from '../../admin.js';
 import { createAdminUsageExportRouter } from './export.js';
 import { errorHandler } from '../../../middleware/errorHandler.js';
 import { requestIdMiddleware } from '../../../middleware/requestId.js';
@@ -85,6 +86,19 @@ describe('GET /api/admin/usage/export', () => {
     expect(res.text).toContain('id,developerId,apiId,endpoint,userId,amount,requestId,createdAt');
     expect(res.text).toContain('req-1');
     expect(res.text).toContain('req-2');
+  });
+
+  it('is mounted on /api/admin/usage/export from the parent admin router', async () => {
+    mockQuery.mockResolvedValueOnce(asResult(MOCK_ROWS));
+    const app = express();
+    app.use(requestIdMiddleware);
+    app.use('/api/admin', adminRouter);
+    app.use(errorHandler);
+
+    const res = await request(app).get('/api/admin/usage/export');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/^text\/csv/);
   });
 
   it('streams JSON export when format=json', async () => {
