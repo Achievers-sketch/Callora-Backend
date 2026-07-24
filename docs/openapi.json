@@ -380,6 +380,170 @@
         }
       }
     },
+    "/api/usage/by-endpoint": {
+      "get": {
+        "summary": "Top-N endpoints by call volume",
+        "description": "Returns the authenticated developer's most-called API endpoints ranked by call volume within the requested time window. Useful for identifying hot endpoints and optimising spend. Defaults to the last 30 days and top 5 endpoints when the corresponding query parameters are omitted.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start of period (ISO-8601). Defaults to 30 days ago.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of period (ISO-8601). Defaults to now.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of endpoints to return. Must be a positive integer. Defaults to 5.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5
+            }
+          },
+          {
+            "name": "apiId",
+            "in": "query",
+            "description": "Filter results to a specific API by its ID.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top endpoints returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "period"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "Endpoints ordered by call count descending. Ties are broken by endpoint path ascending.",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "endpoint",
+                          "calls",
+                          "revenue"
+                        ],
+                        "properties": {
+                          "endpoint": {
+                            "type": "string",
+                            "description": "Endpoint path (e.g. `/v1/weather/current`)."
+                          },
+                          "calls": {
+                            "type": "integer",
+                            "description": "Total number of calls to this endpoint in the period."
+                          },
+                          "revenue": {
+                            "type": "string",
+                            "description": "Total revenue generated in smallest USDC units (string to avoid precision loss)."
+                          }
+                        }
+                      }
+                    },
+                    "period": {
+                      "type": "object",
+                      "required": [
+                        "from",
+                        "to"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Effective start of the query period."
+                        },
+                        "to": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Effective end of the query period."
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "endpoint": "/v1/weather/current",
+                      "calls": 142,
+                      "revenue": "142000"
+                    },
+                    {
+                      "endpoint": "/v1/weather/forecast",
+                      "calls": 87,
+                      "revenue": "87000"
+                    }
+                  ],
+                  "period": {
+                    "from": "2026-06-01T00:00:00.000Z",
+                    "to": "2026-07-01T00:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters (bad date format, invalid limit, `from` after `to`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/usage/anomalies": {
       "get": {
         "summary": "List detected usage anomalies",
