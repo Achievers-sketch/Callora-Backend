@@ -36,7 +36,6 @@ import { PgUsageEventsRepository } from "./repositories/usageEventsRepository.pg
 import { createRevenueLedgerIndexerJob } from "./services/revenueLedgerIndexer.js";
 import { RevenueSettlementService } from "./services/revenueSettlementService.js";
 import { createSettlementStatusSyncJob } from "./services/settlementStatusSyncJob.js";
-import { createSettlementReconciliationJob } from "./services/settlementReconciliationJob.js";
 import { createIdempotencySweeperJob } from "./services/idempotencySweeper.js";
 import { createPostgresUsageStore } from "./services/usageStore.js";
 import { createPostgresSettlementStore } from "./services/settlementStore.js";
@@ -46,6 +45,7 @@ import { listingsCache } from "./lib/listingsCache.js";
 import { createSlowQueryAlerterJob } from "./workers/slowQueryAlerter.js";
 import { createAnomalyDetectorJob } from "./workers/anomalyDetector.js";
 import { createMonthlyInvoiceJob } from "./workers/monthlyInvoiceJob.js";
+import { createSettlementReconWorker } from "./workers/settlementRecon.js";
 
 // Helper for Jest/CommonJS compat
 const isDirectExecution =
@@ -146,7 +146,7 @@ if (isDirectExecution) {
     },
   );
 
-  const settlementReconJob = createSettlementReconciliationJob(pool, {
+  const settlementReconJob = createSettlementReconWorker(pool, {
     intervalMs: config.settlementRecon.intervalMs,
     horizonUrl: config.stellar.horizonUrl,
     horizonRequestTimeoutMs: config.settlementSync.timeoutMs,
