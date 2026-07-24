@@ -7,8 +7,8 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { pool as defaultPool } from '../../../../db.js';
-import { config as defaultConfig } from '../../../../config/index.js';
+import { pool as defaultPool } from '../../../db.js';
+import { config as defaultConfig } from '../../../config/index.js';
 import {
   checkDatabase,
   checkSorobanRpc,
@@ -16,11 +16,11 @@ import {
   determineOverallStatus,
   type ComponentStatus,
   type ComponentCheck,
-} from '../../../../services/healthCheck.js';
-import { BadRequestError, NotFoundError, InternalServerError } from '../../../../errors/index.js';
-import { logger } from '../../../../logger.js';
-import { getClientIp } from '../../../../lib/clientIp.js';
-import { validate } from '../../../../middleware/validate.js';
+} from '../../../services/healthCheck.js';
+import { BadRequestError, NotFoundError, InternalServerError } from '../../../errors/index.js';
+import { logger } from '../../../logger.js';
+import { getClientIp } from '../../../lib/clientIp.js';
+import { validate } from '../../../middleware/validate.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 

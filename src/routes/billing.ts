@@ -16,6 +16,7 @@ import {
   type AuthenticatedLocals,
 } from "../middleware/requireAuth.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
+import { billingAccessLogMiddleware } from "../middleware/billingAccessLog.js";
 import { billingDeductHistogramMiddleware } from "../middleware/metricsHistogram.js";
 import {
   BillingService,
