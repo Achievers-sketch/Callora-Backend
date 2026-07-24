@@ -112,6 +112,37 @@ describe('shutdown module', () => {
       );
     });
 
+    it('should begin subsystem draining while the HTTP server close callback is still pending', async () => {
+      let closeCallback: ((err?: Error) => void) | undefined;
+      const closeServer = jest.fn((callback: (err?: Error) => void) => {
+        closeCallback = callback;
+      });
+      const closeDatabase = jest.fn(async () => Promise.resolve());
+      const beginShutdown = jest.fn();
+      const awaitIdle = jest.fn(async () => Promise.resolve());
+      const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+      const shutdown = createGracefulShutdownHandler({
+        server: { close: closeServer } as unknown as Server,
+        activeConnections: new Set(),
+        closeDatabase,
+        logger,
+        timeoutMs: 100,
+        subsystems: [{ name: 'test-job', beginShutdown, awaitIdle }],
+      });
+
+      const promise = shutdown('SIGTERM');
+      await Promise.resolve();
+
+      expect(beginShutdown).toHaveBeenCalledTimes(1);
+      expect(awaitIdle).toHaveBeenCalledTimes(1);
+      expect(closeDatabase).not.toHaveBeenCalled();
+
+      closeCallback?.();
+      await expect(promise).resolves.toBe(0);
+      expect(closeDatabase).toHaveBeenCalledTimes(1);
+    });
+
     it('should destroy lingering connections after timeout', async () => {
       jest.useFakeTimers();
 
