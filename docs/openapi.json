@@ -70,6 +70,7 @@
                   "summary": "Deduct billing request",
                   "value": {
                     "requestId": "req-123e4567-e89b-12d3-a456-426614174000",
+                    "developerId": "dev-123",
                     "apiId": "api-123",
                     "endpointId": "endpoint-456",
                     "apiKeyId": "key-789",
@@ -1338,13 +1339,9 @@
                   "properties": {
                     "plugins": {
                       "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/PluginRecord"
-                      }
+                      "items": { "$ref": "#/components/schemas/PluginRecord" }
                     },
-                    "total": {
-                      "type": "integer"
-                    }
+                    "total": { "type": "integer" }
                   }
                 }
               }
@@ -1385,9 +1382,7 @@
             "description": "Validation error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -1395,9 +1390,7 @@
             "description": "Unauthorized",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -1405,9 +1398,7 @@
             "description": "Plugin already registered",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           }
@@ -1422,9 +1413,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1432,9 +1421,7 @@
             "description": "Plugin found",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PluginRecord"
-                }
+                "schema": { "$ref": "#/components/schemas/PluginRecord" }
               }
             }
           },
@@ -1442,9 +1429,7 @@
             "description": "Not found",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           }
@@ -1452,32 +1437,22 @@
       },
       "delete": {
         "summary": "Remove a plugin from the registry",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
-          "204": {
-            "description": "Plugin removed"
-          },
+          "204": { "description": "Plugin removed" },
           "401": {
             "description": "Unauthorized",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -1485,9 +1460,7 @@
             "description": "Not found",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           }
@@ -1498,19 +1471,13 @@
       "post": {
         "summary": "Install a plugin",
         "description": "Marks a plugin as installed and fires the install hook. Requires authentication.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1554,9 +1521,7 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -1564,9 +1529,7 @@
             "description": "Unauthorized",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -1574,9 +1537,7 @@
             "description": "Not found",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -1584,9 +1545,7 @@
             "description": "Already installed",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           }
@@ -1594,19 +1553,13 @@
       },
       "delete": {
         "summary": "Uninstall a plugin",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1614,9 +1567,7 @@
             "description": "Plugin uninstalled",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PluginRecord"
-                }
+                "schema": { "$ref": "#/components/schemas/PluginRecord" }
               }
             }
           },
@@ -1624,9 +1575,7 @@
             "description": "Not installed",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -1634,9 +1583,7 @@
             "description": "Unauthorized",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -1644,124 +1591,7 @@
             "description": "Not found",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/admin/db/explain": {
-      "post": {
-        "summary": "Run EXPLAIN ANALYZE on a read-only SQL query",
-        "description": "Executes `EXPLAIN (ANALYZE, FORMAT JSON)` against the primary database pool for a caller-supplied SELECT or WITH query. Only read-only SQL is accepted; multi-statement payloads and any non-SELECT/WITH keyword are rejected at the boundary before the query reaches the database. The raw JSON query plan is returned so admins can diagnose slow queries and missing indexes without needing direct database access. Every call emits a structured audit log entry (`DB_EXPLAIN`) containing the caller identity, client IP, User-Agent, query text, and parameter count. Requires admin authentication (API key or JWT with role=admin) and the admin IP allowlist.",
-        "security": [
-          {
-            "adminApiKey": []
-          },
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "query"
-                ],
-                "properties": {
-                  "query": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 50000,
-                    "description": "SQL query to explain. Must begin with SELECT or WITH (CTEs allowed). Multi-statement queries are rejected.",
-                    "example": "SELECT * FROM usage_events WHERE developer_id = $1 ORDER BY created_at DESC LIMIT 100"
-                  },
-                  "params": {
-                    "type": "array",
-                    "items": {},
-                    "description": "Positional parameter bindings ($1, $2, ...) for the query. Defaults to an empty array.",
-                    "example": [
-                      "dev_abc123"
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Query plan returned successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "plan": {
-                      "description": "The PostgreSQL EXPLAIN (ANALYZE, FORMAT JSON) output. Contains a single JSON plan node when the QUERY PLAN column is present; falls back to the raw rows array otherwise.",
-                      "oneOf": [
-                        {
-                          "type": "string",
-                          "description": "JSON-serialised plan from the QUERY PLAN column"
-                        },
-                        {
-                          "type": "array",
-                          "description": "Raw result rows when QUERY PLAN column is absent",
-                          "items": {}
-                        }
-                      ]
-                    }
-                  }
-                },
-                "example": {
-                  "plan": "[{\"Plan\":{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"usage_events\",\"Startup Cost\":0.00,\"Total Cost\":28.50,\"Plan Rows\":500,\"Plan Width\":64,\"Actual Startup Time\":0.02,\"Actual Total Time\":0.85,\"Actual Rows\":500,\"Actual Loops\":1},\"Planning Time\":0.12,\"Execution Time\":0.93}]"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body, disallowed query type, multi-statement query, or database execution error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized — missing or invalid admin credential",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden by admin IP allowlist",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Database pool not available or internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           }
@@ -1798,23 +1628,10 @@
             "maxLength": 64,
             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
           },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "version": {
-            "type": "string",
-            "pattern": "^\\d+\\.\\d+\\.\\d+$"
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 512
-          },
-          "author": {
-            "type": "string",
-            "maxLength": 128
-          },
+          "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+          "description": { "type": "string", "maxLength": 512 },
+          "author": { "type": "string", "maxLength": 128 },
           "hooks": {
             "type": "array",
             "minItems": 1,
@@ -1878,6 +1695,10 @@
           "requestId": {
             "type": "string"
           },
+          "developerId": {
+            "type": "string",
+            "description": "Optional developer identifier. If provided, it must be a non-empty string. When omitted, the authenticated user ID is used."
+          },
           "apiId": {
             "type": "string"
           },
@@ -1920,13 +1741,7 @@
       },
       "BillingBulkDeductEntry": {
         "type": "object",
-        "required": [
-          "requestId",
-          "apiId",
-          "endpointId",
-          "apiKeyId",
-          "amountUsdc"
-        ],
+        "required": ["events", "stats", "period"],
         "properties": {
           "requestId": {
             "type": "string"
@@ -2632,10 +2447,7 @@
       },
       "DeveloperApiKeysResponse": {
         "type": "object",
-        "required": [
-          "data",
-          "meta"
-        ],
+        "required": ["data", "meta"],
         "properties": {
           "data": {
             "type": "array",
@@ -2645,11 +2457,7 @@
           },
           "meta": {
             "type": "object",
-            "required": [
-              "limit",
-              "nextCursor",
-              "hasMore"
-            ],
+            "required": ["limit", "nextCursor", "hasMore"],
             "properties": {
               "limit": {
                 "type": "integer"

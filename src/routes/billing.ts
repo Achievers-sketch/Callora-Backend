@@ -10,31 +10,40 @@ import {
   NotFoundError,
   PaymentRequiredError,
   UnauthorizedError,
-} from '../errors/index.js';
-import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
-import { idempotencyMiddleware } from '../middleware/idempotency.js';
-import { billingDeductHistogramMiddleware } from '../middleware/metricsHistogram.js';
-import { billingAccessLogMiddleware } from '../middleware/billingAccessLog.js';
-import { BillingService, type BillingDeductResult } from '../services/billing.js';
-import { createSorobanRpcBillingClient, SorobanRpcError } from '../services/sorobanBilling.js';
-import { redactSimulationDetails } from '../lib/simulationDiagnostics.js';
-import creditsRouter from './billing/credits.js';
-import disputesRouter from './billing/disputes.js';
+} from "../errors/index.js";
+import {
+  requireAuth,
+  type AuthenticatedLocals,
+} from "../middleware/requireAuth.js";
+import { idempotencyMiddleware } from "../middleware/idempotency.js";
+import { billingDeductHistogramMiddleware } from "../middleware/metricsHistogram.js";
+import {
+  BillingService,
+  type BillingDeductResult,
+} from "../services/billing.js";
+import {
+  createSorobanRpcBillingClient,
+  SorobanRpcError,
+} from "../services/sorobanBilling.js";
+import { redactSimulationDetails } from "../lib/simulationDiagnostics.js";
+import creditsRouter from "./billing/credits.js";
+import disputesRouter from "./billing/disputes.js";
 
 const router = Router();
 
 router.use(billingAccessLogMiddleware);
 
 // Mount credits sub-router
-router.use('/credits', creditsRouter);
+router.use("/credits", creditsRouter);
 // Mount disputes sub-router
-router.use('/disputes', disputesRouter);
+router.use("/disputes", disputesRouter);
 
 // Mount fee-abstraction sub-router
-router.use('/fee-abstraction', createFeeAbstractionRouter());
+router.use("/fee-abstraction", createFeeAbstractionRouter());
 
 interface BillingDeductBody {
   requestId?: unknown;
+  developerId?: unknown;
   apiId?: unknown;
   endpointId?: unknown;
   apiKeyId?: unknown;
@@ -126,11 +135,17 @@ router.post(
         body.idempotencyKey.trim() !== ""
           ? body.idempotencyKey.trim()
           : (req.get("Idempotency-Key") ?? undefined);
+      const developerId = Object.prototype.hasOwnProperty.call(
+        body,
+        "developerId",
+      )
+        ? requireString(body.developerId, "developerId")
+        : user.id;
 
       const billingService = createRouteBillingService(getPool(req));
       const result = await billingService.deduct({
         requestId,
-        userId: user.id,
+        userId: developerId,
         apiId,
         endpointId,
         apiKeyId,
