@@ -1141,10 +1141,20 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["plugins", "total"],
+                  "required": [
+                    "plugins",
+                    "total"
+                  ],
                   "properties": {
-                    "plugins": { "type": "array", "items": { "$ref": "#/components/schemas/PluginRecord" } },
-                    "total": { "type": "integer" }
+                    "plugins": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PluginRecord"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -1155,12 +1165,18 @@
       "post": {
         "summary": "Register a new plugin",
         "description": "Registers a new community plugin manifest. Requires authentication.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PluginManifest" }
+              "schema": {
+                "$ref": "#/components/schemas/PluginManifest"
+              }
             }
           }
         },
@@ -1169,33 +1185,122 @@
             "description": "Plugin registered",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PluginRecord" }
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
               }
             }
           },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Plugin already registered", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Plugin already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/marketplace/plugins/{id}": {
       "get": {
         "summary": "Get a plugin by ID",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Plugin found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginRecord" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": {
+            "description": "Plugin found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
         "summary": "Remove a plugin from the registry",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "204": { "description": "Plugin removed" },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "204": {
+            "description": "Plugin removed"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -1203,8 +1308,21 @@
       "post": {
         "summary": "Install a plugin",
         "description": "Marks a plugin as installed and fires the install hook. Requires authentication.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Plugin installed",
@@ -1212,17 +1330,29 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["plugin"],
+                  "required": [
+                    "plugin"
+                  ],
                   "properties": {
-                    "plugin": { "$ref": "#/components/schemas/PluginRecord" },
+                    "plugin": {
+                      "$ref": "#/components/schemas/PluginRecord"
+                    },
                     "hook": {
                       "nullable": true,
                       "type": "object",
                       "properties": {
-                        "ok": { "type": "boolean" },
-                        "hook": { "type": "string" },
-                        "pluginId": { "type": "string" },
-                        "sandboxed": { "type": "boolean" }
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "hook": {
+                          "type": "string"
+                        },
+                        "pluginId": {
+                          "type": "string"
+                        },
+                        "sandboxed": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -1230,21 +1360,662 @@
               }
             }
           },
-          "400": { "description": "Bad request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Already installed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
         "summary": "Uninstall a plugin",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Plugin uninstalled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginRecord" } } } },
-          "400": { "description": "Not installed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": {
+            "description": "Plugin uninstalled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/quota/requests": {
+      "post": {
+        "summary": "Submit a quota increase request",
+        "description": "Authenticated developers submit a self-service request to upgrade their plan tier and/or override specific quota limits. The request is created in `pending` state and must be approved or rejected by an admin via the admin API.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuotaRequestCreate"
+              },
+              "examples": {
+                "tierOnly": {
+                  "summary": "Upgrade to pro tier",
+                  "value": {
+                    "requested_tier": "pro",
+                    "reason": "Need higher rate limits for production workload"
+                  }
+                },
+                "withOverrides": {
+                  "summary": "Enterprise upgrade with custom overrides",
+                  "value": {
+                    "requested_tier": "enterprise",
+                    "reason": "Running large-scale production APIs that need higher monthly limits",
+                    "requested_overrides": {
+                      "monthly_call_limit": 500000,
+                      "rate_limit_max_requests": 10000
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Quota request created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuotaRequest"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error – missing or invalid fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List caller's own quota requests",
+        "description": "Returns the authenticated developer's quota requests, optionally filtered by status. Requests belonging to other developers are never returned.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by request status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of the caller's quota requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/QuotaRequest"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/quota/requests/{id}": {
+      "get": {
+        "summary": "Get a single quota request",
+        "description": "Returns a quota request by ID. The caller must own the request — a request belonging to another developer is returned as 404 to avoid leaking resource IDs.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the quota request",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quota request found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuotaRequest"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Quota request not found or not owned by caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/quota/requests": {
+      "get": {
+        "summary": "List all quota requests (admin)",
+        "description": "Returns all developer quota requests across all tenants, optionally filtered by status. Requires admin authentication and the admin IP allowlist.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by request status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of quota requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/QuotaRequest"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized admin request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden by admin IP allowlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/quota/requests/{id}/approve": {
+      "post": {
+        "summary": "Approve a quota request (admin)",
+        "description": "Approves a pending quota request and applies the requested plan tier and overrides to the developer's profile. Emits an audit log entry. Only pending requests can be approved; resolving an already-resolved request returns 409.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the quota request to approve",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "admin_notes": {
+                    "type": "string",
+                    "description": "Optional notes explaining the approval decision"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuotaRequest"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden by admin IP allowlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Quota request not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request already resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/quota/requests/{id}/reject": {
+      "post": {
+        "summary": "Reject a quota request (admin)",
+        "description": "Rejects a pending quota request. The developer's plan is not modified. Only pending requests can be rejected; resolving an already-resolved request returns 409.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the quota request to reject",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "admin_notes": {
+                    "type": "string",
+                    "description": "Optional notes explaining the rejection reason"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuotaRequest"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden by admin IP allowlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Quota request not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request already resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1263,32 +2034,208 @@
       }
     },
     "schemas": {
+      "QuotaRequest": {
+        "type": "object",
+        "description": "A developer quota increase request and its current resolution state.",
+        "required": [
+          "id",
+          "developerId",
+          "requestedTier",
+          "reason",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique request ID (UUID v4)"
+          },
+          "developerId": {
+            "type": "string",
+            "description": "The developer's user ID (from auth)"
+          },
+          "requestedTier": {
+            "type": "string",
+            "enum": [
+              "free",
+              "pro",
+              "enterprise"
+            ],
+            "description": "Requested plan tier"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1000,
+            "description": "Developer-provided justification"
+          },
+          "requestedOverrides": {
+            "type": "object",
+            "description": "Optional specific limits to override in addition to the tier",
+            "properties": {
+              "monthlyCallLimit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Requested monthly API call cap"
+              },
+              "rateLimitMaxRequests": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Requested per-window rate-limit ceiling"
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "description": "Current resolution state"
+          },
+          "adminNotes": {
+            "type": "string",
+            "description": "Admin-provided notes on the approval or rejection decision"
+          },
+          "resolvedBy": {
+            "type": "string",
+            "description": "Actor ID (admin) who resolved the request"
+          },
+          "resolvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO-8601 timestamp when the request was resolved"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO-8601 timestamp when the request was submitted"
+          }
+        }
+      },
+      "QuotaRequestCreate": {
+        "type": "object",
+        "description": "Payload for submitting a new quota increase request.",
+        "required": [
+          "requested_tier",
+          "reason"
+        ],
+        "properties": {
+          "requested_tier": {
+            "type": "string",
+            "enum": [
+              "free",
+              "pro",
+              "enterprise"
+            ],
+            "description": "Desired plan tier"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1000,
+            "description": "Justification for the upgrade (10–1000 characters)"
+          },
+          "requested_overrides": {
+            "type": "object",
+            "description": "Optional specific limit overrides to request alongside the tier upgrade",
+            "properties": {
+              "monthly_call_limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Requested monthly API call cap"
+              },
+              "rate_limit_max_requests": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Requested per-window rate-limit ceiling"
+              }
+            }
+          }
+        }
+      },
       "PluginManifest": {
         "type": "object",
-        "required": ["id", "name", "version", "hooks"],
+        "required": [
+          "id",
+          "name",
+          "version",
+          "hooks"
+        ],
         "properties": {
-          "id": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
-          "name": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-          "description": { "type": "string", "maxLength": 512 },
-          "author": { "type": "string", "maxLength": 128 },
+          "id": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "author": {
+            "type": "string",
+            "maxLength": 128
+          },
           "hooks": {
             "type": "array",
             "minItems": 1,
-            "items": { "type": "string", "enum": ["before_charge", "after_charge", "on_refund", "on_quota_exceeded"] }
+            "items": {
+              "type": "string",
+              "enum": [
+                "before_charge",
+                "after_charge",
+                "on_refund",
+                "on_quota_exceeded"
+              ]
+            }
           },
-          "source_url": { "type": "string", "format": "uri" }
+          "source_url": {
+            "type": "string",
+            "format": "uri"
+          }
         }
       },
       "PluginRecord": {
         "type": "object",
-        "required": ["manifest", "status", "created_at"],
+        "required": [
+          "manifest",
+          "status",
+          "created_at"
+        ],
         "properties": {
-          "manifest": { "$ref": "#/components/schemas/PluginManifest" },
-          "status": { "type": "string", "enum": ["available", "installed"] },
-          "installed_by": { "type": "string", "nullable": true },
-          "installed_at": { "type": "string", "nullable": true },
-          "created_at": { "type": "string" }
+          "manifest": {
+            "$ref": "#/components/schemas/PluginManifest"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "installed"
+            ]
+          },
+          "installed_by": {
+            "type": "string",
+            "nullable": true
+          },
+          "installed_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          }
         }
       },
       "BillingDeductRequest": {

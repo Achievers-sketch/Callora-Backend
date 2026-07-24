@@ -86,3 +86,25 @@ export type Api = typeof apis.$inferSelect;
 export type NewApi = typeof apis.$inferInsert;
 export type ApiEndpoint = typeof apiEndpoints.$inferSelect;
 export type NewApiEndpoint = typeof apiEndpoints.$inferInsert;
+
+// Quota requests table — stores developer-initiated tier/override requests
+// and their admin resolution. requested_overrides is JSON-serialised text.
+export const quotaRequests = sqliteTable('quota_requests', {
+  id: text('id').primaryKey(),                    // UUID generated in service
+  developer_id: text('developer_id').notNull(),   // references developers.user_id
+  requested_tier: text('requested_tier').notNull(),
+  reason: text('reason').notNull(),
+  requested_overrides: text('requested_overrides'), // JSON: { monthlyCallLimit?, rateLimitMaxRequests? }
+  status: text('status', { enum: ['pending', 'approved', 'rejected'] })
+    .notNull()
+    .default('pending'),
+  admin_notes: text('admin_notes'),
+  resolved_by: text('resolved_by'),
+  resolved_at: integer('resolved_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+export type QuotaRequestRow = typeof quotaRequests.$inferSelect;
+export type NewQuotaRequestRow = typeof quotaRequests.$inferInsert;
