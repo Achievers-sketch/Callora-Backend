@@ -215,6 +215,9 @@ export const envSchema = z
     USAGE_ANOMALY_WINDOW_MS: z.coerce.number().int().positive().default(300_000),
     USAGE_ANOMALY_BASELINE_WINDOWS: z.coerce.number().int().positive().default(12),
     USAGE_ANOMALY_DEDUP_WINDOW_MS: z.coerce.number().int().positive().optional(),
+
+    // Monthly invoice job
+    MONTHLY_INVOICE_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(86400000),
   })
   .superRefine((values, ctx) => {
     if (values.SOROBAN_RPC_ENABLED && !values.SOROBAN_RPC_URL) {
