@@ -38,6 +38,7 @@ See [docs/fee-abstraction.md](./docs/fee-abstraction.md) for full API reference,
 - Top-N endpoints per developer: `GET /api/usage/by-endpoint` — returns the authenticated developer's most-called endpoints ranked by call volume, filterable by `from`/`to`/`apiId`/`limit` (see [docs/usage-by-endpoint.md](./docs/usage-by-endpoint.md))
 - Live usage stream: `GET /api/usage/sse` for authenticated developer dashboards
 - Admin usage anomalies: `GET /api/admin/usage/anomalies` returns per-API daily usage anomalies (z-score spikes/drops) for admin review, filterable by `from`/`to`/`apiId`/`threshold`/`limit` (admin auth + IP allowlist)
+- Admin DB explain: `POST /api/admin/db/explain` runs `EXPLAIN (ANALYZE, FORMAT JSON)` on a read-only SQL query and returns the query plan for diagnostic use (admin auth + IP allowlist); see [docs/admin-db-explain.md](./docs/admin-db-explain.md)
 - Usage anomaly detector: background worker emits `usage.anomaly.detected` when per-developer 5-minute traffic exceeds a rolling 12-window baseline by a configurable multiplier (see `docs/usage-anomaly-detector.md`)
 - Settlement reconciliation: nightly worker that reconciles DB settlement status with on-chain Horizon transaction data, detecting discrepancies like missing transactions, stale pending settlements, and false failures (see `docs/settlement-reconciliation-worker.md`)
 - JSON body parsing plus gateway API key authentication for upstream proxy routes
