@@ -35,6 +35,7 @@ import { bodyValidator } from './middleware/validate.js';
 import { buildDeveloperAnalytics } from './services/developerAnalytics.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { performHealthCheck, type HealthCheckConfig } from './services/healthCheck.js';
+import { createDependenciesRouter } from './routes/health/dependencies.js';
 import quotaRequestsRouter from './routes/quota/requests.js';
 import { parsePagination, paginatedResponse } from './lib/pagination.js';
 import { InMemoryVaultRepository, type VaultRepository } from './repositories/vaultRepository.js';
@@ -63,7 +64,7 @@ import { apiKeyRepository } from './repositories/apiKeyRepository.js';
 import { apiRegistrationSchema } from './validators/apiRegistration.js';
 import { stellarNetworkQuerySchema } from './validators/networkSchema.js';
 import path from 'path';
-import OpenApiValidator from 'express-openapi-validator';
+import * as OpenApiValidator from 'express-openapi-validator';
 
 interface AppDependencies {
   usageEventsRepository?: UsageEventsRepository;
@@ -264,6 +265,9 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
    *   }
    * }
    */
+  // Per-dependency health probe — detailed status for each configured dependency
+  app.use('/api/health/dependencies', createDependenciesRouter(dependencies?.healthCheckConfig));
+
   app.get('/api/health', async (_req, res) => {
     // If no health check config provided, return simple health check
     if (!dependencies?.healthCheckConfig) {
