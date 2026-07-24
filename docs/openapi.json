@@ -70,6 +70,7 @@
                   "summary": "Deduct billing request",
                   "value": {
                     "requestId": "req-123e4567-e89b-12d3-a456-426614174000",
+                    "developerId": "dev-123",
                     "apiId": "api-123",
                     "endpointId": "endpoint-456",
                     "apiKeyId": "key-789",
@@ -299,11 +300,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "day",
-                "week",
-                "month"
-              ]
+              "enum": ["day", "week", "month"]
             }
           }
         ],
@@ -443,10 +440,7 @@
                               },
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "spike",
-                                  "drop"
-                                ]
+                                "enum": ["spike", "drop"]
                               },
                               "calls": {
                                 "type": "integer"
@@ -1143,7 +1137,10 @@
                   "type": "object",
                   "required": ["plugins", "total"],
                   "properties": {
-                    "plugins": { "type": "array", "items": { "$ref": "#/components/schemas/PluginRecord" } },
+                    "plugins": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/PluginRecord" }
+                    },
                     "total": { "type": "integer" }
                   }
                 }
@@ -1173,29 +1170,92 @@
               }
             }
           },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Plugin already registered", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "Plugin already registered",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     },
     "/api/marketplace/plugins/{id}": {
       "get": {
         "summary": "Get a plugin by ID",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
-          "200": { "description": "Plugin found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginRecord" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": {
+            "description": "Plugin found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PluginRecord" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       },
       "delete": {
         "summary": "Remove a plugin from the registry",
         "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "204": { "description": "Plugin removed" },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     },
@@ -1204,7 +1264,14 @@
         "summary": "Install a plugin",
         "description": "Marks a plugin as installed and fires the install hook. Requires authentication.",
         "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Plugin installed",
@@ -1230,21 +1297,84 @@
               }
             }
           },
-          "400": { "description": "Bad request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Already installed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "Already installed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       },
       "delete": {
         "summary": "Uninstall a plugin",
         "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
-          "200": { "description": "Plugin uninstalled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginRecord" } } } },
-          "400": { "description": "Not installed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": {
+            "description": "Plugin uninstalled",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PluginRecord" }
+              }
+            }
+          },
+          "400": {
+            "description": "Not installed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     }
@@ -1267,7 +1397,12 @@
         "type": "object",
         "required": ["id", "name", "version", "hooks"],
         "properties": {
-          "id": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "id": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
           "name": { "type": "string", "minLength": 1, "maxLength": 128 },
           "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
           "description": { "type": "string", "maxLength": 512 },
@@ -1275,7 +1410,15 @@
           "hooks": {
             "type": "array",
             "minItems": 1,
-            "items": { "type": "string", "enum": ["before_charge", "after_charge", "on_refund", "on_quota_exceeded"] }
+            "items": {
+              "type": "string",
+              "enum": [
+                "before_charge",
+                "after_charge",
+                "on_refund",
+                "on_quota_exceeded"
+              ]
+            }
           },
           "source_url": { "type": "string", "format": "uri" }
         }
@@ -1303,6 +1446,10 @@
         "properties": {
           "requestId": {
             "type": "string"
+          },
+          "developerId": {
+            "type": "string",
+            "description": "Optional developer identifier. If provided, it must be a non-empty string. When omitted, the authenticated user ID is used."
           },
           "apiId": {
             "type": "string"
@@ -1346,23 +1493,13 @@
       },
       "UsageResponse": {
         "type": "object",
-        "required": [
-          "events",
-          "stats",
-          "period"
-        ],
+        "required": ["events", "stats", "period"],
         "properties": {
           "events": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "apiId",
-                "endpoint",
-                "occurredAt",
-                "revenue"
-              ],
+              "required": ["id", "apiId", "endpoint", "occurredAt", "revenue"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -1385,11 +1522,7 @@
           },
           "stats": {
             "type": "object",
-            "required": [
-              "totalCalls",
-              "totalSpent",
-              "breakdownByApi"
-            ],
+            "required": ["totalCalls", "totalSpent", "breakdownByApi"],
             "properties": {
               "totalCalls": {
                 "type": "integer"
@@ -1401,11 +1534,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "apiId",
-                    "calls",
-                    "revenue"
-                  ],
+                  "required": ["apiId", "calls", "revenue"],
                   "properties": {
                     "apiId": {
                       "type": "string"
@@ -1423,11 +1552,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "period",
-                    "calls",
-                    "revenue"
-                  ],
+                  "required": ["period", "calls", "revenue"],
                   "properties": {
                     "period": {
                       "type": "string"
@@ -1445,10 +1570,7 @@
           },
           "period": {
             "type": "object",
-            "required": [
-              "from",
-              "to"
-            ],
+            "required": ["from", "to"],
             "properties": {
               "from": {
                 "type": "string",
@@ -1507,17 +1629,11 @@
             "type": "integer"
           },
           "firstEventAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "lastEventAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "statusCodes": {
@@ -1530,9 +1646,7 @@
       },
       "AdminUsageSnapshotResponse": {
         "type": "object",
-        "required": [
-          "data"
-        ],
+        "required": ["data"],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/AdminUsageSnapshot"
@@ -1541,17 +1655,11 @@
       },
       "AdminUsageResetResponse": {
         "type": "object",
-        "required": [
-          "data"
-        ],
+        "required": ["data"],
         "properties": {
           "data": {
             "type": "object",
-            "required": [
-              "developerId",
-              "reset",
-              "priorValues"
-            ],
+            "required": ["developerId", "reset", "priorValues"],
             "properties": {
               "developerId": {
                 "type": "string"
@@ -1568,10 +1676,7 @@
       },
       "ApisListResponse": {
         "type": "object",
-        "required": [
-          "data",
-          "pagination"
-        ],
+        "required": ["data", "pagination"],
         "properties": {
           "data": {
             "type": "array",
@@ -1581,11 +1686,7 @@
           },
           "pagination": {
             "type": "object",
-            "required": [
-              "limit",
-              "offset",
-              "total"
-            ],
+            "required": ["limit", "offset", "total"],
             "properties": {
               "limit": {
                 "type": "integer"
@@ -1602,12 +1703,7 @@
       },
       "ApiCreateRequest": {
         "type": "object",
-        "required": [
-          "name",
-          "base_url",
-          "category",
-          "endpoints"
-        ],
+        "required": ["name", "base_url", "category", "endpoints"],
         "properties": {
           "name": {
             "type": "string"
@@ -1625,11 +1721,7 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "path",
-                "method",
-                "price_per_call_usdc"
-              ],
+              "required": ["path", "method", "price_per_call_usdc"],
               "properties": {
                 "path": {
                   "type": "string"
@@ -1736,9 +1828,7 @@
       },
       "BulkEndpointRegistrationRequest": {
         "type": "object",
-        "required": [
-          "endpoints"
-        ],
+        "required": ["endpoints"],
         "properties": {
           "endpoints": {
             "type": "array",
@@ -1746,11 +1836,7 @@
             "maxItems": 50,
             "items": {
               "type": "object",
-              "required": [
-                "path",
-                "method",
-                "price_per_call_usdc"
-              ],
+              "required": ["path", "method", "price_per_call_usdc"],
               "properties": {
                 "path": {
                   "type": "string",
@@ -1783,9 +1869,7 @@
       },
       "BulkEndpointRegistrationResponse": {
         "type": "object",
-        "required": [
-          "endpoints"
-        ],
+        "required": ["endpoints"],
         "properties": {
           "endpoints": {
             "type": "array",
@@ -1862,10 +1946,7 @@
           },
           "developer": {
             "type": "object",
-            "required": [
-              "id",
-              "name"
-            ],
+            "required": ["id", "name"],
             "properties": {
               "id": {
                 "type": "integer"
@@ -1913,19 +1994,11 @@
       },
       "DeveloperRevenueResponse": {
         "type": "object",
-        "required": [
-          "summary",
-          "settlements",
-          "pagination"
-        ],
+        "required": ["summary", "settlements", "pagination"],
         "properties": {
           "summary": {
             "type": "object",
-            "required": [
-              "total_earned",
-              "pending",
-              "available_to_withdraw"
-            ],
+            "required": ["total_earned", "pending", "available_to_withdraw"],
             "properties": {
               "total_earned": {
                 "type": "number"
@@ -1975,11 +2048,7 @@
           },
           "pagination": {
             "type": "object",
-            "required": [
-              "limit",
-              "offset",
-              "total"
-            ],
+            "required": ["limit", "offset", "total"],
             "properties": {
               "limit": {
                 "type": "integer"
@@ -2028,10 +2097,7 @@
       },
       "DeveloperApiKeysResponse": {
         "type": "object",
-        "required": [
-          "data",
-          "meta"
-        ],
+        "required": ["data", "meta"],
         "properties": {
           "data": {
             "type": "array",
@@ -2041,11 +2107,7 @@
           },
           "meta": {
             "type": "object",
-            "required": [
-              "limit",
-              "nextCursor",
-              "hasMore"
-            ],
+            "required": ["limit", "nextCursor", "hasMore"],
             "properties": {
               "limit": {
                 "type": "integer"
@@ -2063,21 +2125,14 @@
       },
       "GatewayHealthResponse": {
         "type": "object",
-        "required": [
-          "apiSlug",
-          "latency",
-          "breaker"
-        ],
+        "required": ["apiSlug", "latency", "breaker"],
         "properties": {
           "apiSlug": {
             "type": "string"
           },
           "latency": {
             "type": "object",
-            "required": [
-              "p50",
-              "p95"
-            ],
+            "required": ["p50", "p95"],
             "properties": {
               "p50": {
                 "type": "number",
@@ -2093,17 +2148,11 @@
           },
           "breaker": {
             "type": "object",
-            "required": [
-              "state"
-            ],
+            "required": ["state"],
             "properties": {
               "state": {
                 "type": "string",
-                "enum": [
-                  "closed",
-                  "open",
-                  "half-open"
-                ]
+                "enum": ["closed", "open", "half-open"]
               }
             }
           }
@@ -2111,11 +2160,7 @@
       },
       "ErrorResponse": {
         "type": "object",
-        "required": [
-          "code",
-          "message",
-          "requestId"
-        ],
+        "required": ["code", "message", "requestId"],
         "properties": {
           "code": {
             "$ref": "#/components/schemas/ErrorCode"
