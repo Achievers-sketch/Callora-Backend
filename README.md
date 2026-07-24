@@ -81,6 +81,7 @@ The migration is in `migrations/0019_disputes.sql` (rollback: `migrations/0019_d
 - Admin DB explain: `POST /api/admin/db/explain` runs `EXPLAIN (ANALYZE, FORMAT JSON)` on a read-only SQL query and returns the query plan for diagnostic use (admin auth + IP allowlist); see [docs/admin-db-explain.md](./docs/admin-db-explain.md)
 - Usage anomaly detector: background worker emits `usage.anomaly.detected` when per-developer 5-minute traffic exceeds a rolling 12-window baseline by a configurable multiplier (see `docs/usage-anomaly-detector.md`)
 - Settlement reconciliation: nightly worker that reconciles DB settlement status with on-chain Horizon transaction data, detecting discrepancies like missing transactions, stale pending settlements, and false failures (see `docs/settlement-reconciliation-worker.md`)
+- Multi-region read-replica routing: optional round-robin routing of SELECT queries to PostgreSQL read replicas via `REPLICA_URLS`; writes always use the primary; automatic fallback to primary on replica failure (see [docs/replica-routing.md](./docs/replica-routing.md))
 - JSON body parsing plus gateway API key authentication for upstream proxy routes
 - Per-user global REST rate limiting for authenticated `/api/billing`, `/api/usage`, `/api/developers`, `/api/vault`, and `/api/keys` traffic, with IP fallback for unauthenticated requests
 - In-memory `VaultRepository` with:
@@ -353,6 +354,7 @@ For request-id validation, AsyncLocalStorage propagation, structured logging, an
 | `DB_POOL_MAX` | No | `10` | Max pool connections |
 | `DB_IDLE_TIMEOUT_MS` | No | `30000` | Pool idle timeout (ms) |
 | `DB_CONN_TIMEOUT_MS` | No | `2000` | Pool connection timeout (ms) |
+| `REPLICA_URLS` | No | — | Comma-separated `postgresql://` read-replica connection strings. When set, SELECT queries are round-robin routed to replicas; writes always use `DATABASE_URL`. Omit or leave blank to use primary-only mode. See [docs/replica-routing.md](./docs/replica-routing.md). |
 | `JWT_SECRET` | **Yes** | — | Secret for signing JWTs |
 | `ADMIN_API_KEY` | **Yes** | — | Key for admin endpoints |
 | `METRICS_API_KEY` | **Yes** | — | Key for `/api/metrics` in production |
