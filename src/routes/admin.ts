@@ -17,6 +17,7 @@ import {
 import { createAdminWebhooksRouter } from './admin/webhooks.js';
 import { createAdminApisRouter } from './admin/apis.js';
 import { createAdminHealthProbesRouter } from './admin/health/probes.js';
+import { createAdminCreditGrantsRouter } from './admin/billing/credits/grant.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 const usageStore: UsageAdminStore = createUsageStore();
@@ -219,5 +220,11 @@ router.use('/apis', createAdminApisRouter());
 //          GET /api/admin/health/probes/:component
 // ---------------------------------------------------------------------------
 router.use('/health/probes', createAdminHealthProbesRouter());
+
+// ---------------------------------------------------------------------------
+// GrantFox FWC26 prepaid-credit grants
+// Mount: POST /api/admin/billing/credits/grant
+// ---------------------------------------------------------------------------
+router.use('/billing/credits', createAdminCreditGrantsRouter());
 
 export default router;
