@@ -19,6 +19,7 @@ import { createSorobanRpcBillingClient, SorobanRpcError } from '../services/soro
 import { redactSimulationDetails } from '../lib/simulationDiagnostics.js';
 import creditsRouter from './billing/credits.js';
 import disputesRouter from './billing/disputes.js';
+import bulkDeductRouter from './billing/deduct/bulk.js';
 
 const router = Router();
 
@@ -26,6 +27,9 @@ const router = Router();
 router.use('/credits', creditsRouter);
 // Mount disputes sub-router
 router.use('/disputes', disputesRouter);
+
+// Mount bulk-deduct sub-router
+router.use('/deduct/bulk', bulkDeductRouter);
 
 // Mount fee-abstraction sub-router
 router.use('/fee-abstraction', createFeeAbstractionRouter());
