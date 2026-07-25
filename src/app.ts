@@ -38,10 +38,11 @@ import { TransactionBuilderService } from './services/transactionBuilder.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { validate } from './middleware/validate.js';
 import { requestLogger } from './middleware/logging.js';
+import { envelopeValidator } from './middleware/envelopeValidator.js';
 import { createConfiguredRestRateLimitMiddleware } from './middleware/restRateLimit.js';
 import { metricsMiddleware, metricsEndpoint } from './metrics.js';
 import { config } from './config/index.js';
-import { validateUpstreamBaseUrl } from './lib/upstreamTarget.js';
+import { successEnvelope, errorEnvelope, getRequestId } from './lib/envelope.js';
 import {
   BadRequestError,
   ForbiddenError,
@@ -202,6 +203,9 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   app.use(express.json({ limit: requestBodyLimit }));
   app.use(express.urlencoded({ extended: false, limit: requestBodyLimit }));
 
+  // Register envelope validator after body parser but before routes
+  app.use(envelopeValidator);
+
   /**
    * GET /api/health
    *
@@ -211,42 +215,62 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
    * @schema HealthCheckResult | BasicHealthResult
    * @example Basic
    * {
-   *   "status": "ok",
-   *   "service": "callora-backend"
+   *   "success": true,
+   *   "data": {
+   *     "status": "ok",
+   *     "service": "callora-backend"
+   *   },
+   *   "requestId": "...",
+   *   "timestamp": "..."
    * }
    * @example Full
    * {
-   *   "status": "ok",
-   *   "version": "1.0.0",
-   *   "timestamp": "2026-03-27T10:00:00.000Z",
-   *   "checks": {
-   *     "api": "ok",
-   *     "database": "ok",
-   *     "soroban_rpc": "ok"
-   *   }
+   *   "success": true,
+   *   "data": {
+   *     "status": "ok",
+   *     "version": "1.0.0",
+   *     "timestamp": "2026-03-27T10:00:00.000Z",
+   *     "checks": {
+   *       "api": "ok",
+   *       "database": "ok",
+   *       "soroban_rpc": "ok"
+   *     }
+   *   },
+   *   "requestId": "...",
+   *   "timestamp": "..."
    * }
    */
-  app.get('/api/health', async (_req, res) => {
+  app.get('/api/health', async (req, res) => {
+    const requestId = getRequestId(req);
+    
     // If no health check config provided, return simple health check
     if (!dependencies?.healthCheckConfig) {
-      res.json({ status: 'ok', service: 'callora-backend' });
+      const data = { status: 'ok', service: 'callora-backend' };
+      res.json(successEnvelope(data, requestId));
       return;
     }
 
     try {
       const healthStatus = await performHealthCheck(dependencies.healthCheckConfig);
       const statusCode = healthStatus.status === 'down' ? 503 : 200;
-      res.status(statusCode).json(healthStatus);
+      res.status(statusCode).json(successEnvelope(healthStatus, requestId));
     } catch {
       // Never expose internal errors in health check
-      res.status(503).json({
-        status: 'down',
-        timestamp: new Date().toISOString(),
-        checks: {
-          api: 'ok',
-          database: 'down',
-        },
-      });
+      res.status(503).json(
+        errorEnvelope(
+          'SERVICE_UNAVAILABLE',
+          'Health check failed',
+          requestId,
+          {
+            status: 'down',
+            timestamp: new Date().toISOString(),
+            checks: {
+              api: 'ok',
+              database: 'down',
+            },
+          },
+        ),
+      );
     }
   });
 
@@ -272,6 +296,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   }));
 
   app.get('/api/developers/apis', requireAuth, async (req, res: express.Response<unknown, AuthenticatedLocals>, next) => {
+    const requestId = getRequestId(req);
     const user = res.locals.authenticatedUser;
     if (!user) {
       next(new UnauthorizedError());
@@ -319,7 +344,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
       return entry;
     });
 
-    res.json(paginatedResponse(payload, { limit, offset }));
+    res.json(successEnvelope(paginatedResponse(payload, { limit, offset }), requestId));
   });
 
   /**
@@ -353,6 +378,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
    * }
    */
   app.get('/api/developers/analytics', requireAuth, async (req, res: express.Response<unknown, AuthenticatedLocals>, next) => {
+    const requestId = getRequestId(req);
     const user = res.locals.authenticatedUser;
     if (!user) {
       next(new UnauthorizedError());
@@ -394,7 +420,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
     });
 
     const analytics = buildDeveloperAnalytics(events, groupBy, includeTop);
-    res.json(analytics);
+    res.json(successEnvelope(analytics, requestId));
   });
 
   // Deposit transaction preparation endpoint
@@ -466,6 +492,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
    */
   app.post('/api/developers/apis', requireAuth, bodyValidator(apiRegistrationSchema), async (req, res: express.Response<unknown, AuthenticatedLocals>, next) => {
     try {
+      const requestId = getRequestId(req);
       const user = res.locals.authenticatedUser;
       if (!user) {
         next(new UnauthorizedError());
@@ -496,7 +523,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
         })),
       });
 
-      res.status(201).json(api);
+      res.status(201).json(successEnvelope(api, requestId));
     } catch (err) {
       next(err);
     }
