@@ -215,6 +215,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
         'x-request-id' // Added for tracing
       ],
       credentials: true,
+      exposedHeaders: ['X-Request-Id'],
       // Reduce preflight cache time in production for security
       maxAge: isProduction ? 600 : 86400, // 10 minutes vs 24 hours
       optionsSuccessStatus: 204, // No content for preflight
