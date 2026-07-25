@@ -96,6 +96,49 @@ const httpRequestDurationSummary = new client.Summary({
   ageBuckets: 5,
 });
 
+// ── Per-route request-timing histogram (FWC26 Stellar Wave) ────────────────────
+//
+// Dedicated per-route request-duration histogram with a focused label set
+// (route / method / status_code) for route-level SLO dashboards.
+//
+// Metric: http_route_duration_seconds
+//   Type:    Histogram
+//   Labels:  route, method, status_code
+//   Buckets: 1 ms → 10 s (tuned for full in-process request cycles)
+//
+// Metric: http_route_duration_summary_seconds
+//   Type:    Summary
+//   Labels:  route, method, status_code  (+ implicit `quantile` label)
+//   Quantiles: 0.50 (p50), 0.95 (p95), 0.99 (p99)
+//
+// The Summary emits p50 / p95 / p99 with a `quantile` label directly in the
+// Prometheus scrape output — consumers can read these without running
+// histogram_quantile().  The Histogram remains available for server-side
+// aggregation and arbitrary-percentile queries via PromQL.
+//
+// Security / cardinality:
+//   - `route` label is sourced from the same normalised route template used
+//     everywhere else (normalizeRouteForMetrics), so UUIDs / numeric IDs /
+//     pathological paths are collapsed to a bounded cardinality.
+//   - Summary `maxAgeSeconds` / `ageBuckets` cap per-label memory usage.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const httpRouteDuration = new client.Histogram({
+  name: 'http_route_duration_seconds',
+  help: 'Per-route request duration histogram in seconds (FWC26 Stellar Wave)',
+  labelNames: ['route', 'method', 'status_code'],
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+});
+
+const httpRouteDurationSummary = new client.Summary({
+  name: 'http_route_duration_summary_seconds',
+  help: 'Per-route request duration with precomputed p50 / p95 / p99 quantile labels (FWC26 Stellar Wave)',
+  labelNames: ['route', 'method', 'status_code'],
+  percentiles: [0.5, 0.95, 0.99],
+  maxAgeSeconds: 5 * 60,
+  ageBuckets: 5,
+});
+
 // ── HTTP request counter ──────────────────────────────────────────────────────
 
 const httpRequestsTotal = new client.Counter({
@@ -106,7 +149,49 @@ const httpRequestsTotal = new client.Counter({
 
 register.registerMetric(httpRequestDuration);
 register.registerMetric(httpRequestDurationSummary);
+register.registerMetric(httpRouteDuration);
+register.registerMetric(httpRouteDurationSummary);
 register.registerMetric(httpRequestsTotal);
+
+// ── Per-route metric helpers (FWC26 Stellar Wave) ───────────────────────────
+//
+// Expose record helpers so ad-hoc code paths (workers, internal routes,
+// middleware sub-functions) can record per-route timing without going
+// through the full Express middleware stack.
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Manually record a per-route duration observation onto the histogram and
+ * the summary.  Called automatically by `metricsMiddleware` for all
+ * Express-handled requests; exposed directly for non-middleware code paths.
+ *
+ * @param route      – Normalised route template (e.g. `/api/apis/:id`)
+ * @param method     – HTTP verb (GET, POST, …)
+ * @param statusCode – Response status code
+ * @param durationMs – Elapsed time in milliseconds
+ */
+export function recordPerRouteDuration(
+  route: string,
+  method: string,
+  statusCode: number,
+  durationMs: number,
+): void {
+  const labels = {
+    route,
+    method: method.toUpperCase(),
+    status_code: String(statusCode),
+  };
+  const durationSec = durationMs / 1000;
+  httpRouteDuration.observe(labels, durationSec);
+  httpRouteDurationSummary.observe(labels, durationSec);
+}
+
+/** Metric name constants for consumers that build PromQL queries
+ *  programmatically (avoids hard-coding strings in dashboards/tests). */
+export const PER_ROUTE_METRIC_NAMES = {
+  histogram: 'http_route_duration_seconds',
+  summary: 'http_route_duration_summary_seconds',
+} as const;
 
 // ── Gateway upstream profiling ─────────────────────────────────────────────
 //
@@ -252,6 +337,8 @@ function normalizeRouteForMetrics(
 export const metricsMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   const endHistogramTimer = httpRequestDuration.startTimer();
   const endSummaryTimer = httpRequestDurationSummary.startTimer();
+  const endRouteHistogramTimer = httpRouteDuration.startTimer();
+  const endRouteSummaryTimer = httpRouteDurationSummary.startTimer();
 
   res.on('finish', () => {
     // Normalize the route to a safe cardinality label
@@ -262,17 +349,27 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
     );
 
     const routeGroup = resolveRouteGroup(routePattern);
+    const statusCode = res.statusCode.toString();
+    const method = req.method;
 
     const labels = {
-      method: req.method,
+      method,
       route: routePattern,
-      status_code: res.statusCode.toString(),
+      status_code: statusCode,
       route_group: routeGroup,
+    };
+
+    const routeLabels = {
+      route: routePattern,
+      method,
+      status_code: statusCode,
     };
 
     httpRequestsTotal.inc(labels);
     endHistogramTimer(labels);
     endSummaryTimer(labels);
+    endRouteHistogramTimer(routeLabels);
+    endRouteSummaryTimer(routeLabels);
   });
 
   next();
@@ -434,6 +531,8 @@ export function resetUpstreamMetrics(): void {
 export function resetHttpMetrics(): void {
   httpRequestDuration.reset();
   httpRequestDurationSummary.reset();
+  httpRouteDuration.reset();
+  httpRouteDurationSummary.reset();
   httpRequestsTotal.reset();
 }
 
