@@ -482,6 +482,39 @@
         }
       }
     },
+    "/api/usage/sse": {
+      "get": {
+        "summary": "Stream live usage events",
+        "description": "Streams live usage events for the authenticated user over Server-Sent Events. Clients should keep the connection open and process connected and usage events as they arrive.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream established successfully",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/usage/by-endpoint": {
       "get": {
         "summary": "Top-N endpoints by call volume",
