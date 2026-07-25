@@ -35,6 +35,7 @@ import { buildDeveloperAnalytics } from './services/developerAnalytics.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { performHealthCheck, type HealthCheckConfig } from './services/healthCheck.js';
 import { createDependenciesRouter } from './routes/health/dependencies.js';
+import { createRateLimitHealthRouter } from './routes/rate-limit/health.js';
 import quotaRequestsRouter from './routes/quota/requests.js';
 import { parsePagination, paginatedResponse } from './lib/pagination.js';
 import { InMemoryVaultRepository, type VaultRepository } from './repositories/vaultRepository.js';
@@ -275,6 +276,13 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
    */
   // Per-dependency health probe — detailed status for each configured dependency
   app.use('/api/health/dependencies', createDependenciesRouter(dependencies?.healthCheckConfig));
+
+  // Rate-limit health dependency probe — operational status of the rate-limit subsystem
+  app.use('/api/rate-limit/health', createRateLimitHealthRouter({
+    limiter: restRateLimiter,
+    windowMs: restRateLimitOptions.windowMs,
+    maxRequests: restRateLimitOptions.maxRequests,
+  }));
 
   app.get('/api/health', async (_req, res) => {
     // If no health check config provided, return simple health check
