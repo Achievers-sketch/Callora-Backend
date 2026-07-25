@@ -6,7 +6,6 @@
 
 import request from 'supertest';
 import { createApp } from '../app.js';
-import assert from 'node:assert';
 
 // Mock better-sqlite3 to prevent native binding errors
 jest.mock('better-sqlite3', () => {

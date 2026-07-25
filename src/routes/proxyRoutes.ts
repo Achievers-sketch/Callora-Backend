@@ -18,7 +18,7 @@ import {
   TooManyRequestsError,
 } from '../errors/index.js';
 import { CircuitBreakerOpenError } from '../lib/errors.js';
-import { CircuitBreaker, type CircuitBreakerStore } from '../lib/circuitBreaker.js';
+import { CircuitBreaker } from '../lib/circuitBreaker.js';
 import { env } from '../config/env.js';
 import { getOrCreateRequestId } from '../utils/asyncContext.js';
 import { defaultUsageSseBroadcaster } from './usage/sse.js';
@@ -243,7 +243,7 @@ export function createProxyRouter(deps: ProxyDeps): Router {
           upstreamStatus = 502;
           timer.stop(upstreamStatus, outcome);
           // Update metric
-          const openMetrics = await circuitBreaker.getMetrics(breakerKey);
+          await circuitBreaker.getMetrics(breakerKey);
           setGatewayUpstreamBreakerState(breakerKey, 1);
           throw new BadGatewayError('Bad Gateway: upstream unavailable');
         } else if (err instanceof DOMException && err.name === 'TimeoutError') {
@@ -361,104 +361,4 @@ export function createProxyRouter(deps: ProxyDeps): Router {
   }
 
   return router;
-}
-
-interface ReconcileUsageAndBillingArgs {
-  billing: ProxyDeps['billing'];
-  usageStore: ProxyDeps['usageStore'];
-  requestId: string;
-  apiKeyHeader: string;
-  keyRecord: { id: string; userId: string; apiId: string };
-  apiEntry: ApiRegistryEntry;
-  endpoint: EndpointPricing;
-  upstreamStatus: number;
-}
-
-async function reconcileUsageAndBilling({
-  billing,
-  usageStore,
-  requestId,
-  apiKeyHeader,
-  keyRecord,
-  apiEntry,
-  endpoint,
-  upstreamStatus,
-}: ReconcileUsageAndBillingArgs): Promise<void> {
-  let chargeResult:
-    | { success: boolean; alreadyProcessed?: boolean; reconciliationRequired?: boolean; error?: string }
-    | undefined;
-
-  if (endpoint.priceUsdc > 0) {
-    if (billing.chargeUsage) {
-      chargeResult = await billing.chargeUsage({
-        requestId,
-        developerId: keyRecord.userId,
-        apiId: String(apiEntry.id),
-        endpointId: endpoint.endpointId,
-        apiKeyId: keyRecord.id,
-        amountUsdc: endpoint.priceUsdc,
-      });
-    } else {
-      const deduction = await billing.deductCredit(keyRecord.userId, endpoint.priceUsdc);
-      chargeResult = {
-        success: deduction.success,
-        alreadyProcessed: false,
-        reconciliationRequired: false,
-      };
-    }
-
-    if (!chargeResult.success) {
-      if (chargeResult.reconciliationRequired) {
-        console.error(
-          '[proxy billing reconciliation] Billing anchor failed after usage write phase started',
-          {
-            requestId,
-            apiId: apiEntry.id,
-            endpointId: endpoint.endpointId,
-            developerId: keyRecord.userId,
-            error: chargeResult.error ?? 'Unknown billing failure',
-          },
-        );
-      }
-      return;
-    }
-  }
-
-  try {
-    const recorded = usageStore.record({
-      id: randomUUID(),
-      requestId,
-      apiKey: apiKeyHeader,
-      apiKeyId: keyRecord.id,
-      apiId: String(apiEntry.id),
-      endpointId: endpoint.endpointId,
-      userId: keyRecord.userId,
-      amountUsdc: endpoint.priceUsdc,
-      statusCode: upstreamStatus,
-      timestamp: new Date().toISOString(),
-    });
-
-    if (!recorded && !chargeResult?.alreadyProcessed) {
-      console.error(
-        '[proxy billing reconciliation] Usage view write failed after successful billing charge',
-        {
-          requestId,
-          apiId: apiEntry.id,
-          endpointId: endpoint.endpointId,
-          developerId: keyRecord.userId,
-        },
-      );
-    }
-  } catch (error) {
-    console.error(
-      '[proxy billing reconciliation] Usage view write threw after successful billing charge',
-      {
-        requestId,
-        apiId: apiEntry.id,
-        endpointId: endpoint.endpointId,
-        developerId: keyRecord.userId,
-        error: error instanceof Error ? error.message : String(error),
-      },
-    );
-  }
 }

@@ -43,7 +43,7 @@ describe('Bulk Deduct API', () => {
     jest.restoreAllMocks();
   });
 
-  function buildApp(pool: Pool | null = mockPool, service: BillingService = mockBillingService) {
+  function buildApp(pool: Pool | null = mockPool, _service: BillingService = mockBillingService) {
     const app = express();
     app.use(express.json());
     if (pool) {

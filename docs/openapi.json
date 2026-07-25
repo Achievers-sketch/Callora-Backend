@@ -140,6 +140,51 @@
             }
           }
         }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "Get system health status",
+        "description": "Returns overall system health status and component checks.",
+        "responses": {
+          "200": {
+            "description": "System is healthy or degraded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "System is down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health/dependencies": {
+      "get": {
+        "summary": "Get per-dependency health status",
+        "description": "Returns per-dependency health probes (DB, RPC, Horizon) including status, response time, and error details.",
+        "responses": {
+          "200": {
+            "description": "Per-dependency health probe completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthDependenciesResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/billing/deduct": {
@@ -148,7 +193,7 @@
         "description": "Deducts USDC from the user's vault balance to pay for an API call. Authenticated and idempotent.",
         "externalDocs": {
           "description": "SDK idempotency contract and retry guidance",
-          "url": "./sdk/billing-deduct.md"
+          "url": "https://docs.callora.org/sdk/billing-deduct.md"
         },
         "security": [
           {
@@ -3328,6 +3373,46 @@
               },
               "hasMore": {
                 "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "HealthDependenciesResponse": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "dependencies"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dependencies": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "degraded",
+                    "down"
+                  ]
+                },
+                "responseTime": {
+                  "type": "number",
+                  "description": "Response time in milliseconds"
+                },
+                "error": {
+                  "type": "string",
+                  "description": "Sanitized error message"
+                }
               }
             }
           }

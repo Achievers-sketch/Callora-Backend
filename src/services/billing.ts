@@ -220,7 +220,7 @@ interface BulkPhase1Result {
 async function runPhase1(
   client: PoolClient,
   request: BillingDeductRequest,
-  amountInContractUnits: bigint,
+  _amountInContractUnits: bigint,
 ): Promise<Phase1Result> {
   await client.query("BEGIN");
 

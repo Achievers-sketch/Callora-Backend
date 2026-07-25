@@ -15,17 +15,18 @@ export const IDEMPOTENCY_KEY_REUSE_MISMATCH = 'IDEMPOTENCY_KEY_REUSE_MISMATCH' a
 /**
  * Recursively sort keys of an object to ensure stable stringification.
  */
-function sortObjectKeys(obj: any): any {
+function sortObjectKeys(obj: unknown): unknown {
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }
   if (Array.isArray(obj)) {
     return obj.map(sortObjectKeys);
   }
-  const sortedKeys = Object.keys(obj).sort();
-  const sortedObj: Record<string, any> = {};
+  const record = obj as Record<string, unknown>;
+  const sortedKeys = Object.keys(record).sort();
+  const sortedObj: Record<string, unknown> = {};
   for (const key of sortedKeys) {
-    sortedObj[key] = sortObjectKeys(obj[key]);
+    sortedObj[key] = sortObjectKeys(record[key]);
   }
   return sortedObj;
 }

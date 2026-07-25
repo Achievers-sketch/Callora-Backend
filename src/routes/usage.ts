@@ -1,6 +1,6 @@
 import { Router, type Response } from 'express';
 import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
-import { type UsageEventsRepository, type GroupBy } from '../repositories/usageEventsRepository.js';
+import { type UsageEventsRepository, type GroupBy, type UsageEvent, type UsageStats, type UsageBucket } from '../repositories/usageEventsRepository.js';
 import { type UsageEventsPgRepository } from '../repositories/usageEventsRepository.pg.js';
 import { BadRequestError, InternalServerError, UnauthorizedError } from '../errors/index.js';
 import { parsePagination, parseCursorPagination, decodeCursor } from '../lib/pagination.js';
@@ -12,6 +12,33 @@ export interface UsageRouterDeps {
 
 const isValidGroupBy = (value: string): value is GroupBy =>
   value === 'day' || value === 'week' || value === 'month';
+
+interface CursorAugmentedEvents extends Array<UsageEvent> {
+  _nextCursor?: string;
+  _hasMore?: boolean;
+}
+
+interface FormattedEvent {
+  id: string;
+  apiId: string;
+  endpoint: string;
+  occurredAt: string;
+  revenue: string;
+  _cursor?: string;
+  _hasMore?: boolean;
+}
+
+interface UsageResponse {
+  events: FormattedEvent[];
+  stats: {
+    totalCalls: number;
+    totalSpent: string;
+    breakdownByApi: Array<{ apiId: string; calls: number; revenue: string }>;
+    buckets?: Array<{ period: string; calls: number; revenue: string }>;
+  };
+  period: { from: string; to: string };
+  pagination?: Record<string, unknown>;
+}
 
 const parseDate = (value: unknown): Date | null => {
   if (typeof value !== 'string') {
@@ -135,7 +162,7 @@ export function createUsageRouter(deps: UsageRouterDeps): Router {
       // Check if cursor pagination is requested
       const hasCursor = req.query.cursor !== undefined && req.query.cursor !== '';
       
-      let events: any[];
+      let events: UsageEvent[];
       let nextCursor: string | undefined;
       let hasMore = false;
       let total: number | undefined;
@@ -146,7 +173,7 @@ export function createUsageRouter(deps: UsageRouterDeps): Router {
         try {
           const cursorStr = req.query.cursor as string;
           decodeCursor(cursorStr);
-        } catch (error) {
+        } catch {
           next(new BadRequestError('Invalid cursor format. Cursor must be base64 encoded created_at|id'));
           return;
         }
@@ -163,8 +190,8 @@ export function createUsageRouter(deps: UsageRouterDeps): Router {
         });
 
         events = result;
-        nextCursor = (result as any)._nextCursor;
-        hasMore = (result as any)._hasMore || false;
+        nextCursor = (result as CursorAugmentedEvents)._nextCursor;
+        hasMore = (result as CursorAugmentedEvents)._hasMore || false;
         total = undefined;
       } else {
         // Legacy offset/limit pagination
@@ -193,7 +220,7 @@ export function createUsageRouter(deps: UsageRouterDeps): Router {
       });
 
       // Format events
-      const formattedEvents = events.map((event: any) => ({
+      const formattedEvents = events.map((event: UsageEvent) => ({
         id: event.id,
         apiId: event.apiId,
         endpoint: event.endpoint,
@@ -202,17 +229,17 @@ export function createUsageRouter(deps: UsageRouterDeps): Router {
       }));
 
       // Build response
-      const response: any = {
+      const response: UsageResponse = {
         events: formattedEvents,
         stats: {
           totalCalls: stats.totalCalls,
           totalSpent: stats.totalRevenue.toString(),
-          breakdownByApi: stats.breakdownByApi.map((stat: any) => ({
+          breakdownByApi: stats.breakdownByApi.map((stat: UsageStats) => ({
             apiId: stat.apiId,
             calls: stat.calls,
             revenue: stat.revenue.toString(),
           })),
-          buckets: stats.buckets?.map((bucket: any) => ({
+          buckets: stats.buckets?.map((bucket: UsageBucket) => ({
             period: bucket.period,
             calls: bucket.calls,
             revenue: bucket.revenue.toString(),
@@ -231,7 +258,7 @@ export function createUsageRouter(deps: UsageRouterDeps): Router {
           nextCursor,
           hasMore,
         };
-        formattedEvents.forEach((e: any) => {
+        formattedEvents.forEach((e: FormattedEvent) => {
           delete e._cursor;
           delete e._hasMore;
         });
