@@ -25,15 +25,15 @@ describe("OpenAPI Examples for /api/billing/deduct", () => {
     expect(responses["200"].content!["application/json"].examples).toBeDefined();
     const successExample = responses["200"].content!["application/json"].examples!.success;
     expect((successExample as OpenApiExample).summary).toBe("Successful deduction");
-    expect((successExample as OpenApiExample).value.success).toBe(true);
-    expect((successExample as OpenApiExample).value.alreadyProcessed).toBe(false);
+    expect((successExample as OpenApiExample).value?.success).toBe(true);
+    expect((successExample as OpenApiExample).value?.alreadyProcessed).toBe(false);
 
     const alreadyProcessedExample =
       responses["200"].content!["application/json"].examples!.alreadyProcessed;
     expect((alreadyProcessedExample as OpenApiExample).summary).toBe(
       "Already processed (idempotent)",
     );
-    expect((alreadyProcessedExample as OpenApiExample).value.alreadyProcessed).toBe(true);
+    expect((alreadyProcessedExample as OpenApiExample).value?.alreadyProcessed).toBe(true);
 
     // 409 Idempotency conflict example
     expect(responses["409"]).toBeDefined();
@@ -43,7 +43,7 @@ describe("OpenAPI Examples for /api/billing/deduct", () => {
     expect((conflictExample as OpenApiExample).summary).toBe(
       "Idempotency key already used with different parameters",
     );
-    expect((conflictExample as OpenApiExample).value.code).toBe("IDEMPOTENCY_CONFLICT");
+    expect((conflictExample as OpenApiExample).value?.code).toBe("IDEMPOTENCY_CONFLICT");
 
     // 429 Rate limit example with Retry-After header
     expect(responses["429"]).toBeDefined();
@@ -52,7 +52,7 @@ describe("OpenAPI Examples for /api/billing/deduct", () => {
     const rateLimitedExample =
       responses["429"].content!["application/json"].examples!.rateLimited;
     expect((rateLimitedExample as OpenApiExample).summary).toBe("Too many requests");
-    expect((rateLimitedExample as OpenApiExample).value.code).toBe("TOO_MANY_REQUESTS");
+    expect((rateLimitedExample as OpenApiExample).value?.code).toBe("TOO_MANY_REQUESTS");
   });
 
   test("Request body examples contain required fields", () => {
@@ -65,12 +65,12 @@ describe("OpenAPI Examples for /api/billing/deduct", () => {
       ].examples!.deductRequest;
 
     expect((deductRequest as OpenApiExample).summary).toBe("Deduct billing request");
-    expect((deductRequest as OpenApiExample).value.requestId).toBeDefined();
-    expect((deductRequest as OpenApiExample).value.apiId).toBeDefined();
-    expect((deductRequest as OpenApiExample).value.endpointId).toBeDefined();
-    expect((deductRequest as OpenApiExample).value.apiKeyId).toBeDefined();
-    expect((deductRequest as OpenApiExample).value.amountUsdc).toBeDefined();
-    expect((deductRequest as OpenApiExample).value.idempotencyKey).toBeDefined();
+    expect((deductRequest as OpenApiExample).value?.requestId).toBeDefined();
+    expect((deductRequest as OpenApiExample).value?.apiId).toBeDefined();
+    expect((deductRequest as OpenApiExample).value?.endpointId).toBeDefined();
+    expect((deductRequest as OpenApiExample).value?.apiKeyId).toBeDefined();
+    expect((deductRequest as OpenApiExample).value?.amountUsdc).toBeDefined();
+    expect((deductRequest as OpenApiExample).value?.idempotencyKey).toBeDefined();
   });
 
   test("OpenAPI spec is valid JSON without nested responses object", () => {
