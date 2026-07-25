@@ -7,6 +7,7 @@ import { requireAuth, type AuthenticatedLocals } from '../../middleware/requireA
 import { validate } from '../../middleware/validate.js';
 import { defaultCreditsRepository, type CreditsRepository } from '../../repositories/creditsRepository.js';
 import { logger } from '../../logger.js';
+import { creditsHistogramMiddleware } from '../../middleware/creditsHistogram.js';
 
 const router = Router();
 
@@ -53,6 +54,7 @@ router.get(
   '/',
   requireAuth,
   validate({ query: getCreditsQuerySchema }),
+  creditsHistogramMiddleware,
   async (
     req: Request,
     res: Response<unknown, AuthenticatedLocals>,
