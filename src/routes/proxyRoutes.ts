@@ -2,7 +2,13 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
 import { ProxyDeps, ProxyConfig, ApiRegistryEntry, EndpointPricing } from '../types/gateway.js';
 import { resolveEndpointPrice } from '../data/apiRegistry.js';
-import { startUpstreamTimer, recordProxyPrematureAbort, type UpstreamOutcome, setGatewayUpstreamBreakerState } from '../metrics.js';
+import {
+  startUpstreamTimer,
+  recordProxyPrematureAbort,
+  type UpstreamOutcome,
+  setGatewayUpstreamBreakerState,
+  recordEndpointThroughputSaturation,
+} from '../metrics.js';
 import { createMapBackedGatewayApiKeyAuthMiddleware } from '../middleware/gatewayApiKeyAuth.js';
 import { buildHopByHopSet } from '../lib/hopByHop.js';
 import {
@@ -114,7 +120,12 @@ export function createProxyRouter(deps: ProxyDeps): Router {
       const apiEntry = req.api as unknown as ApiRegistryEntry | undefined;
       const endpoint = req.endpoint as unknown as EndpointPricing | undefined;
       const apiKeyHeader = req.apiKeyValue;
-      const keyRecord = req.apiKeyRecord as { id: string; userId: string; apiId: string } | undefined;
+      const keyRecord = req.apiKeyRecord as {
+        id: string;
+        userId: string;
+        apiId: string;
+        rateLimitPerMinute?: number | null;
+      } | undefined;
 
       if (!apiEntry || !endpoint || !apiKeyHeader || !keyRecord) {
         next(
@@ -331,6 +342,14 @@ export function createProxyRouter(deps: ProxyDeps): Router {
                     timestamp: new Date().toISOString(),
                   });
                 }
+
+                recordEndpointThroughputSaturation({
+                  apiId: String(apiEntry.id),
+                  endpointId: endpoint.endpointId,
+                  endpointPath: endpoint.path,
+                  advertisedLimitPerMinute: Number(keyRecord?.rateLimitPerMinute ?? 0),
+                  observedAt: Date.now(),
+                });
 
                 // Only deduct billing if this requestId hasn't been processed
                 // before (idempotency guard inside usageStore.record).
