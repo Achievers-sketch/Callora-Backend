@@ -106,7 +106,7 @@
     "/api/gateway/health/{apiSlug}": {
       "get": {
         "summary": "Get gateway health for an API",
-        "description": "Returns aggregated upstream latency percentiles and circuit breaker state for a given API slug. Public endpoint \u2014 no authentication required. Only aggregated metrics are returned; no tenant identifiers or raw histogram data are exposed. Results are cached in-memory for 5 seconds.",
+        "description": "Returns aggregated upstream latency percentiles and circuit breaker state for a given API slug. Public endpoint — no authentication required. Only aggregated metrics are returned; no tenant identifiers or raw histogram data are exposed. Results are cached in-memory for 5 seconds.",
         "parameters": [
           {
             "name": "apiSlug",
@@ -624,7 +624,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized \u2014 missing or invalid bearer token.",
+            "description": "Unauthorized — missing or invalid bearer token.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1373,7 +1373,7 @@
         },
         "responses": {
           "201": {
-            "description": "Endpoints registered successfully \u2014 per-row details returned",
+            "description": "Endpoints registered successfully — per-row details returned",
             "content": {
               "application/json": {
                 "schema": {
@@ -1383,7 +1383,7 @@
             }
           },
           "400": {
-            "description": "Validation error \u2014 invalid endpoint data, empty array, or too many endpoints",
+            "description": "Validation error — invalid endpoint data, empty array, or too many endpoints",
             "content": {
               "application/json": {
                 "schema": {
@@ -2349,7 +2349,7 @@
             "type": "string",
             "minLength": 10,
             "maxLength": 1000,
-            "description": "Justification for the upgrade (10\u20131000 characters)"
+            "description": "Justification for the upgrade (10–1000 characters)"
           },
           "requested_overrides": {
             "type": "object",
@@ -3469,6 +3469,7 @@
           "MALFORMED_WEBHOOK_SIGNATURE",
           "INVALID_WEBHOOK_SIGNATURE",
           "INVALID_DELIVERY_ID",
+          "INVALID_RETRY_POLICY",
           "DLQ_ENTRY_NOT_FOUND",
           "INVALID_IP_FORMAT",
           "IP_NOT_ALLOWED",
