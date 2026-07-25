@@ -9,3 +9,7 @@
 ### Fixed
 
 - Return `400 BAD_REQUEST` from `POST /api/billing/deduct` when a client provides a null or empty `developerId` instead of allowing the request to proceed into billing logic.
+
+### Changed
+
+- Structured access logs now preserve `x-correlation-id` values for API requests so downstream tracing can correlate requests across services.
