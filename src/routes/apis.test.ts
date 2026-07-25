@@ -8,7 +8,9 @@ jest.mock('better-sqlite3', () => {
 
 import express from 'express';
 import request from 'supertest';
+import { createAccessLogMiddleware } from '../middleware/accessLog.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { logger } from '../middleware/logging.js';
 import { InMemoryApiRepository } from '../repositories/apiRepository.js';
 import type { Api, Developer } from '../db/schema.js';
 import type { DeveloperRepository } from '../repositories/developerRepository.js';
@@ -126,6 +128,29 @@ describe('createApisRouter', () => {
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].id).toBe(2);
     expect(res.body.data[0].status).toBe('draft');
+  });
+
+  it('uses the request correlation id in access logs for API routes', async () => {
+    const infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+    const repo = new InMemoryApiRepository([], new Map());
+    const app = express();
+    app.use(createAccessLogMiddleware({ random: () => 0 }));
+    app.use('/api/apis', createApisRouter({ apiRepository: repo, developerRepository }));
+    app.use(errorHandler);
+
+    try {
+      const res = await request(app).get('/api/apis').set('x-correlation-id', 'corr-route-123');
+
+      expect(res.status).toBe(200);
+      expect(infoSpy).toHaveBeenCalled();
+      expect(infoSpy.mock.calls[0][0]).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-route-123',
+        }),
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
   });
 
   it('rejects unknown status filters with 400', async () => {

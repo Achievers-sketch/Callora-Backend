@@ -112,6 +112,49 @@ describe('createAccessLogMiddleware', () => {
     }
   });
 
+  test('uses a correlation id from request headers when present', () => {
+    const infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+    const middleware = createAccessLogMiddleware({ random: () => 0 });
+
+    try {
+      const req = Object.assign(new EventEmitter(), {
+        method: 'GET',
+        path: '/api/apis',
+        headers: { 'x-correlation-id': 'corr-123' },
+        id: undefined,
+      }) as unknown as EventEmitter & Request & { id?: string };
+
+      const res = Object.assign(new EventEmitter(), {
+        statusCode: 200,
+        writableEnded: true,
+        setHeader: jest.fn(),
+        write: jest.fn(() => true),
+        end: jest.fn(() => true),
+      }) as unknown as EventEmitter &
+        Response & {
+          statusCode: number;
+          write: jest.Mock;
+          end: jest.Mock;
+          setHeader: jest.Mock;
+          writableEnded: boolean;
+        };
+
+      middleware(req, res, jest.fn());
+      res.end();
+      res.emit('finish');
+
+      expect(infoSpy).toHaveBeenCalledTimes(1);
+      expect(infoSpy.mock.calls[0][0]).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-123',
+          requestId: expect.any(String),
+        }),
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
   test('skips logging when sample rate is zero', () => {
     const infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
     const middleware = createAccessLogMiddleware({ sampleRate: 0, random: () => 0 });
