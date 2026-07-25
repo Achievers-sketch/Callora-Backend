@@ -222,6 +222,7 @@ export const config = {
     warmupTimeoutMs: env.LISTINGS_CACHE_WARMUP_TIMEOUT_MS,
   },
   bulkEndpointLimit: env.BULK_ENDPOINT_LIMIT,
+  routeBodyLimits: env.ROUTE_BODY_LIMITS,
 
   slowQueryAlerter: {
     webhookUrl: env.SLOW_QUERY_ALERT_WEBHOOK_URL,
