@@ -213,6 +213,7 @@ export const config = {
     maxPerDeveloper: env.BILLING_MAX_CONCURRENCY_PER_DEV,
     semaphoreTtlMs: env.BILLING_SEMAPHORE_TTL_MS,
   },
+  routeBodyLimits: env.ROUTE_BODY_LIMITS,
   idempotency: {
     retentionWindowSeconds: env.IDEMPOTENCY_RETENTION_WINDOW_SECONDS,
     sweeperIntervalMs: env.IDEMPOTENCY_SWEEPER_INTERVAL_MS,
