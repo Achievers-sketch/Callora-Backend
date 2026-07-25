@@ -4,11 +4,39 @@
 
 The `/api/health` endpoint provides comprehensive health monitoring for all system components. It's designed for load balancer integration and monitoring systems.
 
-## Endpoint
+## Endpoints
 
+- `GET /api/health` — Aggregate system health check (used by load balancers)
+- `GET /api/health/dependencies` — Per-dependency health probe (used for internal dashboards and deep diagnostics)
+
+## Per-Dependency Health Probe (`GET /api/health/dependencies`)
+
+Returns fine-grained probe data for each configured system dependency, including individual status, response time, and sanitized error messages.
+
+### Response Format (200 OK)
+
+```json
+{
+  "timestamp": "2026-07-24T15:00:00.000Z",
+  "dependencies": {
+    "database": {
+      "status": "ok",
+      "responseTime": 12
+    },
+    "soroban_rpc": {
+      "status": "down",
+      "responseTime": 2001,
+      "error": "timeout"
+    },
+    "horizon": {
+      "status": "ok",
+      "responseTime": 145
+    }
+  }
+}
 ```
-GET /api/health
-```
+
+## Aggregate Health Check (`GET /api/health`)
 
 ## Response Format
 

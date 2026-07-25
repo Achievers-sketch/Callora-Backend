@@ -8,7 +8,7 @@ import {
   SettlementStore,
 } from '../types/developer.js';
 import { UsageStore } from '../types/gateway.js';
-import { BadRequestError, ForbiddenError, UnauthorizedError } from '../errors/index.js';
+import { ForbiddenError, UnauthorizedError } from '../errors/index.js';
 import type { DeveloperRepository } from '../repositories/developerRepository.js';
 import type { ReportExporterService } from '../services/reportExporter.js';
 

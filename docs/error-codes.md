@@ -73,6 +73,7 @@ This section is generated from `docs/error-codes.yaml`. Run `npm run error-codes
 | `MALFORMED_WEBHOOK_SIGNATURE` | Webhooks |
 | `INVALID_WEBHOOK_SIGNATURE` | Webhooks |
 | `INVALID_DELIVERY_ID` | Webhooks |
+| `INVALID_RETRY_POLICY` | Webhooks |
 | `DLQ_ENTRY_NOT_FOUND` | Webhooks |
 | `INVALID_IP_FORMAT` | IP allowlist |
 | `IP_NOT_ALLOWED` | IP allowlist |

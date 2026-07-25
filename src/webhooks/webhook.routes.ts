@@ -28,6 +28,7 @@ const VALID_EVENTS: WebhookEventType[] = [
   'new_api_call',
   'settlement_completed',
   'low_balance_alert',
+  'usage_event.created',
 ];
 
 function generateWebhookSecret(): string {
@@ -105,12 +106,7 @@ router.get('/:developerId', webhookMgmtRateLimit, (req: Request, res: Response) 
   }
   // Never expose the secret
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const {
-    secret: _s,
-    secret_current: _sc,
-    secret_previous: _sp,
-    ...safeConfig
-  } = config;
+  const { secret, secret_current, secret_previous, ...safeConfig } = config;
   return res.json(safeConfig);
 });
 
@@ -187,12 +183,7 @@ router.patch('/:developerId/retry-policy', webhookMgmtRateLimit, (req: Request, 
 
     // Never expose the secret
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const {
-      secret: _s,
-      secret_current: _sc,
-      secret_previous: _sp,
-      ...safeConfig
-    } = updated;
+    const { secret, secret_current, secret_previous, ...safeConfig } = updated;
 
     return res.status(200).json({
       message: 'Webhook retry policy updated successfully.',

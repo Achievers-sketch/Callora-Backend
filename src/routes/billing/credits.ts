@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 
-import { BadRequestError, NotFoundError, UnauthorizedError } from '../../errors/index.js';
+import { UnauthorizedError } from '../../errors/index.js';
 import { requireAuth, type AuthenticatedLocals } from '../../middleware/requireAuth.js';
 import { validate } from '../../middleware/validate.js';
 import { defaultCreditsRepository, type CreditsRepository } from '../../repositories/creditsRepository.js';

@@ -1,5 +1,4 @@
 import { createMonthlyInvoiceJob } from './monthlyInvoiceJob.js';
-import { InvoiceService } from '../services/InvoiceService.js';
 
 jest.mock('../services/InvoiceService.js');
 

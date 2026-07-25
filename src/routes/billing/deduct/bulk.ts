@@ -1,6 +1,6 @@
 import { Router, type Response, type NextFunction, type Request } from 'express';
 import { z } from 'zod';
-import { BadRequestError, UnauthorizedError, InternalServerError } from '../../../errors/index.js';
+import { UnauthorizedError, InternalServerError } from '../../../errors/index.js';
 import { requireAuth, type AuthenticatedLocals } from '../../../middleware/requireAuth.js';
 import { validate } from '../../../middleware/validate.js';
 import { BillingService } from '../../../services/billing.js';

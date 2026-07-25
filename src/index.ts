@@ -22,7 +22,6 @@ import {
   type DrainableSubsystem,
 } from "./lifecycle/shutdown.js";
 import type { Socket } from "net";
-import type { Server } from "http";
 
 import { createDeveloperRouter } from "./routes/developerRoutes.js";
 import { createGatewayRouter } from "./routes/gatewayRoutes.js";

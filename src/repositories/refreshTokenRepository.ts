@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import type { RefreshToken } from '../types/auth.js';
-import { logger } from '../logger.js';
 import { readQuery, writeQuery } from '../db.js';
 
 /** Injectable queryable for tests. */

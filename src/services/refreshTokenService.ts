@@ -55,7 +55,7 @@ export class RefreshTokenService {
     };
     
     const accessToken = jwt.sign(accessTokenPayload, this.jwtSecret, {
-      expiresIn: this.accessTokenExpiry as any,
+      expiresIn: this.accessTokenExpiry,
       algorithm: 'HS256'
     });
 
@@ -66,7 +66,7 @@ export class RefreshTokenService {
     };
     
     const refreshToken = jwt.sign(refreshTokenPayload, this.jwtSecret, {
-      expiresIn: this.refreshTokenExpiry as any,
+      expiresIn: this.refreshTokenExpiry,
       algorithm: 'HS256'
     });
 
@@ -185,7 +185,7 @@ export class RefreshTokenService {
     };
 
     return jwt.sign(payload, this.jwtSecret, {
-      expiresIn: this.accessTokenExpiry as any,
+      expiresIn: this.accessTokenExpiry,
       algorithm: 'HS256'
     });
   }

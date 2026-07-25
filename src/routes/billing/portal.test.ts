@@ -4,15 +4,14 @@ import { errorHandler } from '../../middleware/errorHandler.js';
 import { requestIdMiddleware } from '../../middleware/requestId.js';
 import { createBillingPortalRouter, type PrismaClient } from './portal.js';
 import { generateInvoicePdf } from '../../services/invoicePdf.js';
-import { encodeCursor } from '../../lib/cursorPagination.js';
 
-function createMockPrisma(): PrismaClient & { __mockData: any[] } {
-  const store: any[] = [];
+function createMockPrisma(): PrismaClient & { __mockData: Record<string, unknown>[] } {
+  const store: Record<string, unknown>[] = [];
 
   return {
     __mockData: store,
     invoice: {
-      findMany: jest.fn(async ({ where, orderBy, take }: any) => {
+      findMany: jest.fn(async ({ where, orderBy: _orderBy, take }: { where?: Record<string, unknown>; orderBy?: unknown; take?: number }) => {
         let results = store
           .filter((inv) => {
             if (where?.user_id && inv.user_id !== where.user_id) return false;
@@ -34,17 +33,17 @@ function createMockPrisma(): PrismaClient & { __mockData: any[] } {
             }
             return true;
           })
-          .sort((a: any, b: any) => {
-            const cmp = b.created_at.getTime() - a.created_at.getTime();
-            return cmp !== 0 ? cmp : b.id.localeCompare(a.id);
+          .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+            const cmp = (b.created_at as Date).getTime() - (a.created_at as Date).getTime();
+            return cmp !== 0 ? cmp : (b.id as string).localeCompare(a.id as string);
           })
           .slice(0, take);
 
         return results;
       }),
-      findFirst: jest.fn(async ({ where, include }: any) => {
+      findFirst: jest.fn(async ({ where, include }: { where?: Record<string, unknown>; include?: Record<string, unknown> }) => {
         const inv = store.find(
-          (i) => i.id === where.id && i.user_id === where.user_id,
+          (i) => i.id === where?.id && i.user_id === where?.user_id,
         );
         if (!inv) return null;
         if (include?.line_items) {
@@ -52,11 +51,11 @@ function createMockPrisma(): PrismaClient & { __mockData: any[] } {
         }
         return { ...inv, line_items: inv.line_items ?? [] };
       }),
-      findUnique: jest.fn(async ({ where }: any) => {
-        return store.find((i) => i.id === where.id) || null;
+      findUnique: jest.fn(async ({ where }: { where?: Record<string, unknown> }) => {
+        return store.find((i) => i.id === where?.id) || null;
       }),
-      update: jest.fn(async ({ where, data }: any) => {
-        const idx = store.findIndex((i) => i.id === where.id);
+      update: jest.fn(async ({ where, data }: { where?: Record<string, unknown>; data?: Record<string, unknown> }) => {
+        const idx = store.findIndex((i) => i.id === where?.id);
         if (idx === -1) return null;
         store[idx] = { ...store[idx], ...data };
         return store[idx];
@@ -65,7 +64,7 @@ function createMockPrisma(): PrismaClient & { __mockData: any[] } {
   };
 }
 
-function seedInvoice(store: any[], overrides: Record<string, any> = {}) {
+function seedInvoice(store: Record<string, unknown>[], overrides: Record<string, unknown> = {}) {
   const now = new Date();
   const invoice = {
     id: overrides.id ?? '00000000-0000-0000-0000-000000000001',
@@ -97,7 +96,7 @@ function buildApp(prisma: PrismaClient) {
 }
 
 describe('Billing Portal Routes', () => {
-  let prisma: PrismaClient & { __mockData: any[] };
+  let prisma: PrismaClient & { __mockData: Record<string, unknown>[] };
 
   beforeEach(() => {
     prisma = createMockPrisma();
@@ -181,7 +180,7 @@ describe('Billing Portal Routes', () => {
         .set('x-user-id', 'user-a');
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(2);
-      expect(res.body.data.every((i: any) => i.status === 'paid')).toBe(true);
+      expect(res.body.data.every((i: Record<string, unknown>) => i.status === 'paid')).toBe(true);
     });
 
     it('validates limit cannot exceed 100', async () => {

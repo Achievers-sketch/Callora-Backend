@@ -27,6 +27,7 @@ when specific events occur on the Callora platform.
 | `new_api_call`        | A developer's API is called               |
 | `settlement_completed`| A USDC revenue settlement completes after DB commit |
 | `low_balance_alert`   | Developer balance drops below threshold   |
+| `usage_event.created` | A usage event is recorded for an API call |
 
 ---
 
@@ -71,6 +72,20 @@ All events POST a JSON body with this structure:
   "currentBalance": "2.0000000",
   "thresholdBalance": "5.0000000",
   "asset": "XLM"
+}
+```
+
+### `usage_event.created` data
+```json
+{
+  "id": "ue_abc123",
+  "requestId": "req_xyz789",
+  "apiId": "api_456",
+  "endpointId": "ep_789",
+  "developerId": "dev_abc123",
+  "amountUsdc": 25,
+  "statusCode": 200,
+  "timestamp": "2026-07-25T10:00:00.000Z"
 }
 ```
 

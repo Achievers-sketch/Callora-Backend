@@ -1,6 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import { etagMiddleware, generateETag } from './etag.js';
+import { etagMiddleware } from './etag.js';
 
 describe('etagMiddleware', () => {
   test('should set ETag header and return 200 for a GET request', async () => {
