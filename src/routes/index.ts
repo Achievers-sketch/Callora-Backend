@@ -15,6 +15,7 @@ import { createUsageByEndpointRouter } from './usage/byEndpoint.js';
 import { createExportSchedulesRouter } from './exports/schedules.js';
 import type { ScheduledExportsService } from '../services/scheduledExports.js';
 import { createSubscriptionRouter } from './subscriptionRoutes.js';
+import { createRefundsCountsRouter } from './refunds/counts.js';
 import type { SubscriptionRepository } from '../repositories/subscriptionRepository.js';
 import type { DeveloperRepository } from '../repositories/developerRepository.js';
 import type { ApiRepository } from '../repositories/apiRepository.js';
@@ -90,6 +91,8 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
     router.use('/billing', billingRouter);
     router.use('/billing/portal', createBillingPortalRouter());
   }
+
+  router.use('/refunds', createRefundsCountsRouter());
 
   if (deps.restRateLimiter) {
     router.use('/limits', createLimitsRouter(deps.restRateLimiter).router);
