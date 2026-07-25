@@ -64,6 +64,11 @@ import { apiRegistrationSchema } from './validators/apiRegistration.js';
 import { stellarNetworkQuerySchema } from './validators/networkSchema.js';
 import path from 'path';
 import OpenApiValidator from 'express-openapi-validator';
+import {
+  envelopeMiddleware,
+  createResponseValidatorMiddleware,
+  buildErrorEnvelope,
+} from './middleware/envelope.js';
 
 interface AppDependencies {
   usageEventsRepository?: UsageEventsRepository;
@@ -160,6 +165,8 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   }));
 
   app.use(requestIdMiddleware);
+  app.use(createResponseValidatorMiddleware());
+  app.use(envelopeMiddleware);
   const memoryAccountingMiddleware = createMemoryAccountingMiddleware(config.memoryAccounting);
   app.use(memoryAccountingMiddleware);
   app.use(metricsMiddleware);
@@ -561,7 +568,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
         status?: number;
         errors?: unknown[];
       },
-      _req: express.Request,
+      req: express.Request,
       res: express.Response,
       next: express.NextFunction,
     ) => {
@@ -569,11 +576,24 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
         return next(err);
       }
 
-      res.status(err.status).json({
-        success: false,
-        error: err.message,
-        details: err.errors ?? [],
-      });
+      const requestId = req.id || 'unknown';
+      const details = Array.isArray(err.errors)
+        ? err.errors.map((e, i) => ({
+            field: `body.${i}`,
+            message: typeof e === 'object' && e !== null && 'message' in e
+              ? String((e as { message: unknown }).message)
+              : String(e),
+            code: 'INVALID_BODY',
+          }))
+        : undefined;
+
+      const envelope = buildErrorEnvelope(
+        'BAD_REQUEST',
+        err.message,
+        requestId,
+        details,
+      );
+      res.status(err.status).json(envelope);
     },
   );
 
