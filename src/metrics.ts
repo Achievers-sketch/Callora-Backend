@@ -167,8 +167,12 @@ export function startUpstreamTimer(apiId: string, method: string): UpstreamTimer
   };
 }
 
-/** Sentinel value for routes that couldn't be recognized and normalized. */
-const UNKNOWN_ROUTE_SENTINEL = '_unknown';
+/** Sentinel value for routes that couldn't be recognized and normalized.
+ *
+ * Exported so the SLO recorder (which subscribes to the same finish events)
+ * can reuse this exact constant when classifying unreachable routes.
+ */
+export const UNKNOWN_ROUTE_SENTINEL = '_unknown';
 
 /**
  * Normalize a route to a safe, low-cardinality template pattern.
@@ -182,8 +186,13 @@ const UNKNOWN_ROUTE_SENTINEL = '_unknown';
  *
  * This ensures metrics cardinality stays bounded regardless of URL
  * parameter values, bot activity, or path-scanning attacks.
+ *
+ * Exported so other subsystems (e.g. `src/workers/sloAlertRecorder.ts`)
+ * can reuse the exact same route-normalization rules and produce a route
+ * label identical to the one emitted here. Keeping the two in sync avoids
+ * the recorder and metrics diverging for the same request.
  */
-function normalizeRouteForMetrics(
+export function normalizeRouteForMetrics(
   matched: string | undefined,
   baseUrl: string | undefined,
   unmatched: string,
@@ -528,6 +537,7 @@ export function resetAllMetrics(): void {
   resetUsageAnomalyDetectorMetrics();
   resetReplicaMetrics();
   resetApiKeyLookupMetrics();
+  resetSloAlertMetrics();
 }
 
 // ── Replica routing metrics ───────────────────────────────────────────────────
@@ -686,4 +696,90 @@ export function resetReplicaMetrics(): void {
   dbPrimaryQueriesTotal.reset();
   dbReplicaFallbacksTotal.reset();
   dbReplicaFailuresTotal.reset();
+}
+
+// ── SLO Alerter metrics ───────────────────────────────────────────────────────
+//
+// Metric: slo_recorder_samples_observed_total
+//   Type:    Counter
+//   Labels:  route — composite "METHOD:/pattern" key
+//   Purpose: Confirms the recorder middleware is alive and tallying samples
+//            for each configured SLO route. A flat value over the lifetime
+//            of the process indicates the configured route is no longer
+//            receiving traffic.
+//
+// Metric: slo_alerter_runs_total
+//   Type:    Counter
+//   Labels:  (none)
+//   Purpose: Total poll cycles. Watch alongside
+//            slo_recorder_samples_observed_total to see whether the
+//            alerter is healthy.
+//
+// Metric: slo_alerter_alerts_total
+//   Type:    Counter
+//   Labels:  route, kind — kind ∈ { availability, latency }
+//   Purpose: Burn-rate webhook alerts fired. A rising rate here indicates
+//            the configured routes are exceeding their SLO.
+//
+// Metric: slo_alerter_active_burns
+//   Type:    Gauge
+//   Labels:  (none)
+//   Purpose: Number of (route, kind) tuples currently above their SLO on
+//            the most recent poll. Useful for dashboards; the alerts_total
+//            counter only increments when a dedup-bounded webhook is sent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const sloRecorderSamplesObservedTotal = new client.Counter({
+  name: 'slo_recorder_samples_observed_total',
+  help: 'Total HTTP response samples observed by the SLO recorder, partitioned by configured SLO route',
+  labelNames: ['route'] as const,
+});
+
+const sloAlerterRunsTotal = new client.Counter({
+  name: 'slo_alerter_runs_total',
+  help: 'Total number of SLO alerter poll cycles',
+});
+
+const sloAlerterAlertsTotal = new client.Counter({
+  name: 'slo_alerter_alerts_total',
+  help: 'Total number of SLO burn-rate webhook alerts fired',
+  labelNames: ['route', 'kind'] as const,
+});
+
+const sloAlerterActiveBurns = new client.Gauge({
+  name: 'slo_alerter_active_burns',
+  help: 'Number of (route, kind) tuples currently exceeding their SLO on the most recent poll',
+});
+
+register.registerMetric(sloRecorderSamplesObservedTotal);
+register.registerMetric(sloAlerterRunsTotal);
+register.registerMetric(sloAlerterAlertsTotal);
+register.registerMetric(sloAlerterActiveBurns);
+
+/** Increment the recorder-sample counter for a configured route. */
+export function recordSloRecorderSample(routeKey: string): void {
+  sloRecorderSamplesObservedTotal.inc({ route: routeKey });
+}
+
+/** Increment the SLO alerter poll counter. */
+export function recordSloAlerterRun(): void {
+  sloAlerterRunsTotal.inc();
+}
+
+/** Increment the alerts counter for a (route, kind) tuple. */
+export function recordSloAlert(routeKey: string, kind: string): void {
+  sloAlerterAlertsTotal.inc({ route: routeKey, kind });
+}
+
+/** Set the current number of active burns gauge. */
+export function setSloAlertActiveBurns(count: number): void {
+  sloAlerterActiveBurns.set(count);
+}
+
+/** Reset all SLO alerter metrics. Used in tests to isolate metric state. */
+export function resetSloAlertMetrics(): void {
+  sloRecorderSamplesObservedTotal.reset();
+  sloAlerterRunsTotal.reset();
+  sloAlerterAlertsTotal.reset();
+  sloAlerterActiveBurns.reset();
 }
