@@ -17,6 +17,7 @@ import {
 import { createAdminWebhooksRouter } from './admin/webhooks.js';
 import { createAdminApisRouter } from './admin/apis.js';
 import { createAdminHealthProbesRouter } from './admin/health/probes.js';
+import { createAdminAuditRouter } from './admin/audit.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 const usageStore: UsageAdminStore = createUsageStore();
@@ -219,5 +220,11 @@ router.use('/apis', createAdminApisRouter());
 //          GET /api/admin/health/probes/:component
 // ---------------------------------------------------------------------------
 router.use('/health/probes', createAdminHealthProbesRouter());
+
+// ---------------------------------------------------------------------------
+// Audit log listing
+// Mounts:  GET /api/admin/audit
+// ---------------------------------------------------------------------------
+router.use('/audit', createAdminAuditRouter());
 
 export default router;
