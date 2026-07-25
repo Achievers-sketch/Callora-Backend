@@ -30,7 +30,6 @@ import { billingAccessLogMiddleware } from "../middleware/billingAccessLog.js";
 import creditsRouter from "./billing/credits.js";
 import disputesRouter from "./billing/disputes.js";
 import { createFeeAbstractionRouter } from "./billing/feeAbstraction.js";
-import bulkDeductRouter from "./billing/deduct/bulk.js";
 
 const router = Router();
 
