@@ -141,8 +141,8 @@ describe('Error Handler', () => {
     expect(mockRes.json).not.toHaveBeenCalled();
   });
 
-  it('should include custom code when provided', () => {
-    const error = new AppError('Custom error', 422, 'CUSTOM_CODE');
+  it('should include explicit catalog code when provided', () => {
+    const error = new AppError('Custom error', 422, 'UNPROCESSABLE_ENTITY');
     
     errorHandler(
       error,
@@ -152,9 +152,11 @@ describe('Error Handler', () => {
     );
 
     expect(mockRes.status).toHaveBeenCalledWith(422);
-    const call = (mockRes.json as jest.Mock).mock.calls[0][0];
-    expect(call.error.code).toBe('CUSTOM_CODE');
-    expect(call.error.message).toBe('Custom error');
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: 'Custom error',
+      code: 'UNPROCESSABLE_ENTITY',
+      requestId: 'test-request-id'
+    });
   });
 
   it('should include validation details for validation errors', () => {

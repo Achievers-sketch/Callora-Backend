@@ -11,10 +11,11 @@ import {
   NetworkError,
   SourceAccountNotFoundError,
   TransactionBuildError,
+  SimulationError,
 } from '../services/transactionBuilder.js';
 import type { VaultRepository } from '../repositories/vaultRepository.js';
 import { config } from '../config/index.js';
-import { successEnvelope, errorEnvelope, getRequestId } from '../lib/envelope.js';
+import { redactSimulationDetails } from '../lib/simulationDiagnostics.js';
 
 export interface DepositPrepareRequest {
   amount_usdc: string;
@@ -233,14 +234,20 @@ export class DepositController {
         )
       );
     } else if (error instanceof NetworkError) {
-      res.status(503).json(
-        errorEnvelope(
-          'NETWORK_UNAVAILABLE',
-          'Unable to connect to Stellar network. Please try again later.',
-          requestId,
-          { network: error.message }
-        )
-      );
+      res.status(503).json({
+        error: 'Unable to connect to Stellar network. Please try again later.',
+        code: 'NETWORK_UNAVAILABLE',
+        network: error.message,
+      });
+    } else if (error instanceof SimulationError) {
+      // Log full diagnostics at warning level, but only expose a redacted summary.
+      console.warn('Soroban simulation diagnostics:', error.simulationDetails);
+      const redacted = redactSimulationDetails(error.simulationDetails);
+      res.status(502).json({
+        error: 'Soroban simulation failed. See diagnostics for details.',
+        code: 'SIMULATION_FAILED',
+        simulationDetails: redacted,
+      });
     } else if (error instanceof TransactionBuildError) {
       res.status(502).json(
         errorEnvelope(
@@ -260,4 +267,5 @@ export class DepositController {
       );
     }
   }
+
 }

@@ -25,7 +25,7 @@ export interface UserUsageEventQuery {
   limit?: number;
   offset?: number;
   groupBy?: GroupBy;
-}
+  cursor?: string;}
 
 export interface UsageStats {
   apiId: string;
@@ -50,6 +50,13 @@ export interface UsageEventsRepository {
     breakdownByApi: UsageStats[];
     buckets?: UsageBucket[];
   }>;
+  getTopEndpoints(query: {
+    userId: string;
+    from: Date;
+    to: Date;
+    apiId?: string;
+    limit: number;
+  }): Promise<Array<{ endpoint: string; calls: number; revenue: bigint }>>;
 }
 
 export class InMemoryUsageEventsRepository implements UsageEventsRepository {
@@ -198,6 +205,47 @@ export class InMemoryUsageEventsRepository implements UsageEventsRepository {
     };
   }
 
+  async getTopEndpoints(query: {
+    userId: string;
+    from: Date;
+    to: Date;
+    apiId?: string;
+    limit: number;
+  }): Promise<Array<{ endpoint: string; calls: number; revenue: bigint }>> {
+    const filtered = this.events.filter((event) => {
+      if (event.userId !== query.userId) {
+        return false;
+      }
+      if (query.apiId && event.apiId !== query.apiId) {
+        return false;
+      }
+      return event.occurredAt >= query.from && event.occurredAt <= query.to;
+    });
+
+    const counts = new Map<string, { calls: number; revenue: bigint }>();
+    for (const event of filtered) {
+      const existing = counts.get(event.endpoint) ?? { calls: 0, revenue: 0n };
+      counts.set(event.endpoint, {
+        calls: existing.calls + 1,
+        revenue: existing.revenue + event.revenue,
+      });
+    }
+
+    return [...counts.entries()]
+      .sort((a, b) => {
+        if (b[1].calls !== a[1].calls) {
+          return b[1].calls - a[1].calls;
+        }
+        return a[0].localeCompare(b[0]);
+      })
+      .slice(0, query.limit)
+      .map(([endpoint, stats]) => ({
+        endpoint,
+        calls: stats.calls,
+        revenue: stats.revenue,
+      }));
+  }
+
   private getPeriodString(date: Date, groupBy: GroupBy): string {
     const d = new Date(date);
     if (groupBy === 'day') {
@@ -216,3 +264,4 @@ export class InMemoryUsageEventsRepository implements UsageEventsRepository {
     return d.toISOString().slice(0, 10);
   }
 }
+

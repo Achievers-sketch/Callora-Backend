@@ -1,6 +1,6 @@
-import { Router } from 'express';
-import type { NextFunction, Request, Response } from 'express';
-import type { Pool } from 'pg';
+import { Router } from "express";
+import type { NextFunction, Request, Response } from "express";
+import type { Pool } from "pg";
 
 import {
   BadGatewayError,
@@ -10,36 +10,119 @@ import {
   NotFoundError,
   PaymentRequiredError,
   UnauthorizedError,
-} from '../errors/index.js';
-import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
-import { idempotencyMiddleware } from '../middleware/idempotency.js';
-import { BillingService } from '../services/billing.js';
-import { createSorobanRpcBillingClient, SorobanRpcError } from '../services/sorobanBilling.js';
+} from "../errors/index.js";
+import {
+  requireAuth,
+  type AuthenticatedLocals,
+} from "../middleware/requireAuth.js";
+import { idempotencyMiddleware } from "../middleware/idempotency.js";
+import { billingDeductHistogramMiddleware } from "../middleware/metricsHistogram.js";
+import {
+  BillingService,
+  type BillingDeductResult,
+} from "../services/billing.js";
+import {
+  createSorobanRpcBillingClient,
+  SorobanRpcError,
+} from "../services/sorobanBilling.js";
+import { redactSimulationDetails } from "../lib/simulationDiagnostics.js";
+import { billingAccessLogMiddleware } from "../middleware/billingAccessLog.js";
+import creditsRouter from "./billing/credits.js";
+import disputesRouter from "./billing/disputes.js";
+import bulkDeductRouter from "./billing/deduct/bulk.js";
+import { createFeeAbstractionRouter } from "./billing/feeAbstraction.js";
+import bulkDeductRouter from "./billing/deduct/bulk.js";
 
 const router = Router();
 
+router.use(billingAccessLogMiddleware);
+
+// Mount credits sub-router
+router.use("/credits", creditsRouter);
+// Mount disputes sub-router
+router.use("/disputes", disputesRouter);
+
+// Mount bulk-deduct sub-router
+router.use('/deduct/bulk', bulkDeductRouter);
+
+// Mount fee-abstraction sub-router
+router.use("/fee-abstraction", createFeeAbstractionRouter());
+
+interface BillingDeductBody {
+  requestId?: unknown;
+  developerId?: unknown;
+  apiId?: unknown;
+  endpointId?: unknown;
+  apiKeyId?: unknown;
+  amountUsdc?: unknown;
+  idempotencyKey?: unknown;
+}
+
 function createRouteBillingService(pool: Pool): BillingService {
   const sorobanClient = createSorobanRpcBillingClient({
-    rpcUrl: process.env.SOROBAN_BILLING_RPC_URL ?? process.env.SOROBAN_RPC_URL ?? 'http://localhost:8000',
-    contractId: process.env.SOROBAN_BILLING_CONTRACT_ID ?? 'vault_contract',
+    rpcUrl:
+      process.env.SOROBAN_BILLING_RPC_URL ??
+      process.env.SOROBAN_RPC_URL ??
+      "http://localhost:8000",
+    contractId: process.env.SOROBAN_BILLING_CONTRACT_ID ?? "vault_contract",
     sourceAccount: process.env.SOROBAN_BILLING_SOURCE_ACCOUNT,
     networkPassphrase: process.env.SOROBAN_BILLING_NETWORK_PASSPHRASE,
-    requestTimeoutMs: Number(process.env.SOROBAN_BILLING_RPC_TIMEOUT_MS ?? 5_000),
-    balanceFunctionName: process.env.SOROBAN_BILLING_BALANCE_FN ?? 'balance',
-    deductFunctionName: process.env.SOROBAN_BILLING_DEDUCT_FN ?? 'deduct',
+    requestTimeoutMs: Number(
+      process.env.SOROBAN_BILLING_RPC_TIMEOUT_MS ?? 5_000,
+    ),
+    balanceFunctionName: process.env.SOROBAN_BILLING_BALANCE_FN ?? "balance",
+    deductFunctionName: process.env.SOROBAN_BILLING_DEDUCT_FN ?? "deduct",
   });
 
   return new BillingService(pool, sorobanClient);
 }
 
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new BadRequestError(`${field} is required`);
+  }
+  return value.trim();
+}
+
+function requirePositiveAmount(value: unknown): string {
+  const amount = requireString(value, "amountUsdc");
+  if (!/^\d+(\.\d{1,7})?$/.test(amount) || Number(amount) <= 0) {
+    throw new BadRequestError(
+      "amountUsdc must be a positive number with at most 7 decimal places",
+    );
+  }
+  return amount;
+}
+
+function getPool(req: Request): Pool {
+  const pool = req.app?.locals?.dbPool as Pool | undefined;
+  if (!pool) {
+    throw new InternalServerError("Database pool is not configured");
+  }
+  return pool;
+}
+
+function sendSimulationFailure(
+  res: Response,
+  result: Pick<BillingDeductResult, "error" | "simulationDetails">,
+): void {
+  console.warn("Soroban simulation diagnostics:", result.simulationDetails);
+  res.status(502).json({
+    error: "Soroban simulation failed",
+    code: "SIMULATION_FAILED",
+    simulationDetails: redactSimulationDetails(result.simulationDetails),
+  });
+}
+
 router.post(
-  '/deduct',
+  "/deduct",
   requireAuth,
   idempotencyMiddleware,
+  billingDeductHistogramMiddleware,
   async (
     req: Request,
     res: Response<unknown, AuthenticatedLocals>,
-    next: NextFunction
+    next: NextFunction,
   ) => {
     try {
       const user = res.locals.authenticatedUser;
@@ -48,89 +131,47 @@ router.post(
         return;
       }
 
-      const {
+      const body = req.body as BillingDeductBody;
+      const requestId = requireString(body.requestId, "requestId");
+      const apiId = requireString(body.apiId, "apiId");
+      const endpointId = requireString(body.endpointId, "endpointId");
+      const apiKeyId = requireString(body.apiKeyId, "apiKeyId");
+      const amountUsdc = requirePositiveAmount(body.amountUsdc);
+      const idempotencyKey =
+        typeof body.idempotencyKey === "string" &&
+        body.idempotencyKey.trim() !== ""
+          ? body.idempotencyKey.trim()
+          : (req.get("Idempotency-Key") ?? undefined);
+      const developerId = Object.prototype.hasOwnProperty.call(
+        body,
+        "developerId",
+      )
+        ? requireString(body.developerId, "developerId")
+        : user.id;
+
+      const billingService = createRouteBillingService(getPool(req));
+      const result = await billingService.deduct({
         requestId,
+        userId: developerId,
         apiId,
         endpointId,
         apiKeyId,
         amountUsdc,
         idempotencyKey,
-      } = req.body as Record<string, unknown>;
-
-      if (!requestId || typeof requestId !== 'string' || requestId.trim() === '') {
-        next(new BadRequestError('requestId is required and must be a non-empty string'));
-        return;
-      }
-
-      if (!apiId || typeof apiId !== 'string' || apiId.trim() === '') {
-        next(new BadRequestError('apiId is required and must be a non-empty string'));
-        return;
-      }
-
-      if (!endpointId || typeof endpointId !== 'string' || endpointId.trim() === '') {
-        next(new BadRequestError('endpointId is required and must be a non-empty string'));
-        return;
-      }
-
-      if (!apiKeyId || typeof apiKeyId !== 'string' || apiKeyId.trim() === '') {
-        next(new BadRequestError('apiKeyId is required and must be a non-empty string'));
-        return;
-      }
-
-      if (!amountUsdc || typeof amountUsdc !== 'string') {
-        next(new BadRequestError('amountUsdc is required and must be a string'));
-        return;
-      }
-
-      const amount = Number(amountUsdc);
-      if (!Number.isFinite(amount) || amount <= 0) {
-        next(new BadRequestError('amountUsdc must be a positive number'));
-        return;
-      }
-
-      if (
-        idempotencyKey !== undefined &&
-        (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '')
-      ) {
-        next(new BadRequestError('idempotencyKey must be a non-empty string when provided'));
-        return;
-      }
-
-      const pool = req.app.locals.dbPool as Pool | undefined;
-      if (!pool) {
-        next(new InternalServerError('Database not available', 'DATABASE_NOT_AVAILABLE'));
-        return;
-      }
-
-      const billingService = createRouteBillingService(pool);
-
-      const result = await billingService.deduct({
-        requestId: requestId.trim(),
-        userId: user.id,
-        apiId: apiId.trim(),
-        endpointId: endpointId.trim(),
-        apiKeyId: apiKeyId.trim(),
-        amountUsdc: amountUsdc.trim(),
-        idempotencyKey:
-          typeof idempotencyKey === 'string' ? idempotencyKey.trim() : undefined,
       });
 
       if (!result.success) {
-        const message = result.error ?? 'Billing deduction failed';
-        const lower = message.toLowerCase();
-        if (lower.includes('insufficient balance') || lower.includes('insufficient funds')) {
-          next(new PaymentRequiredError(message, 'INSUFFICIENT_BALANCE'));
+        if (result.simulationDetails) {
+          sendSimulationFailure(res, result);
           return;
         }
-        if (lower.includes('timeout') || lower.includes('timed out')) {
-          next(new GatewayTimeoutError(message, 'SOROBAN_RPC_TIMEOUT'));
-          return;
-        }
-        if (lower.includes('balance check failed') || lower.includes('contract') || lower.includes('network')) {
-          next(new BadGatewayError(message, 'SOROBAN_RPC_ERROR'));
-          return;
-        }
-        next(new InternalServerError('Billing deduction failed', 'BILLING_DEDUCTION_FAILED'));
+
+        next(
+          new PaymentRequiredError(
+            result.error ?? "Billing deduction failed",
+            "BILLING_DEDUCTION_FAILED",
+          ),
+        );
         return;
       }
 
@@ -142,31 +183,46 @@ router.post(
       });
     } catch (error) {
       if (error instanceof SorobanRpcError) {
+        if (error.simulationDetails) {
+          console.warn(
+            "Soroban simulation diagnostics:",
+            error.simulationDetails,
+          );
+          res.status(502).json({
+            error: "Soroban simulation failed",
+            code: "SIMULATION_FAILED",
+            simulationDetails: redactSimulationDetails(error.simulationDetails),
+          });
+          return;
+        }
+
         switch (error.category) {
-          case 'INSUFFICIENT_BALANCE':
-            next(new PaymentRequiredError(error.message, 'INSUFFICIENT_BALANCE'));
+          case "INSUFFICIENT_BALANCE":
+            next(
+              new PaymentRequiredError(error.message, "INSUFFICIENT_BALANCE"),
+            );
             return;
-          case 'TIMEOUT':
-            next(new GatewayTimeoutError(error.message, 'SOROBAN_RPC_TIMEOUT'));
+          case "TIMEOUT":
+            next(new GatewayTimeoutError(error.message, "SOROBAN_RPC_TIMEOUT"));
             return;
-          case 'CONTRACT_ERROR':
-          case 'NETWORK_ERROR':
-            next(new BadGatewayError(error.message, 'SOROBAN_RPC_ERROR'));
+          case "CONTRACT_ERROR":
+          case "NETWORK_ERROR":
+            next(new BadGatewayError(error.message, "SOROBAN_RPC_ERROR"));
             return;
         }
       }
       next(error);
     }
-  }
+  },
 );
 
 router.get(
-  '/request/:requestId',
+  "/request/:requestId",
   requireAuth,
   async (
     req: Request,
     res: Response<unknown, AuthenticatedLocals>,
-    next: NextFunction
+    next: NextFunction,
   ) => {
     try {
       const user = res.locals.authenticatedUser;
@@ -175,28 +231,22 @@ router.get(
         return;
       }
 
-      const { requestId } = req.params;
-      if (!requestId || requestId.trim() === '') {
-        next(new BadRequestError('requestId is required and must be a non-empty string'));
-        return;
-      }
-
-      const pool = req.app.locals.dbPool as Pool | undefined;
-      if (!pool) {
-        next(new InternalServerError('Database not available', 'DATABASE_NOT_AVAILABLE'));
-        return;
-      }
-
-      const billingService = createRouteBillingService(pool);
-      const result = await billingService.getByRequestId(requestId.trim());
+      const requestId = requireString(req.params.requestId, "requestId");
+      const billingService = createRouteBillingService(getPool(req));
+      const result = await billingService.getByRequestId(requestId);
 
       if (!result) {
-        next(new NotFoundError('Billing request not found', 'BILLING_REQUEST_NOT_FOUND'));
+        next(
+          new NotFoundError(
+            "Billing request not found",
+            "BILLING_REQUEST_NOT_FOUND",
+          ),
+        );
         return;
       }
 
       res.status(200).json({
-        success: true,
+        success: result.success,
         usageEventId: result.usageEventId,
         stellarTxHash: result.stellarTxHash,
         alreadyProcessed: result.alreadyProcessed,
@@ -204,7 +254,7 @@ router.get(
     } catch (error) {
       next(error);
     }
-  }
+  },
 );
 
 export default router;

@@ -5,6 +5,7 @@ import { buildCacheKey, listingsCache, type ListingsCache } from '../lib/listing
 import { recordCacheHit, recordCacheMiss } from '../metrics.js';
 import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
 import { bodyValidator } from '../middleware/validate.js';
+import { etagMiddleware } from '../middleware/etag.js';
 import {
   defaultApiRepository,
   type ApiRepository,
@@ -13,13 +14,16 @@ import {
   defaultDeveloperRepository,
   type DeveloperRepository,
 } from '../repositories/developerRepository.js';
-import { apiRegistrationSchema } from '../validators/apiRegistration.js';
+import { apiRegistrationSchema, bulkEndpointsSchema } from '../validators/apiRegistration.js';
+import { createRateLimitMiddleware } from '../middleware/rateLimit.js';
 
 export interface ApisRouterDeps {
   apiRepository?: ApiRepository;
   developerRepository?: DeveloperRepository;
   /** Inject a custom cache instance (useful in tests). Defaults to the shared singleton. */
   cache?: ListingsCache;
+  /** Optional rate limit middleware for the public API routes. */
+  rateLimitMiddleware?: ReturnType<typeof createRateLimitMiddleware>;
 }
 
 export function createApisRouter(deps: ApisRouterDeps = {}): Router {
@@ -27,8 +31,14 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
   const apiRepository = deps.apiRepository ?? defaultApiRepository;
   const developerRepository = deps.developerRepository ?? defaultDeveloperRepository;
   const cache = deps.cache ?? listingsCache;
+  const rateLimitMiddleware = deps.rateLimitMiddleware ?? createRateLimitMiddleware({
+    windowMs: 60_000,
+    maxRequests: 60,
+  });
 
-  router.get('/', async (req, res, next) => {
+  router.use(rateLimitMiddleware);
+
+  router.get('/', etagMiddleware, async (req, res, next) => {
     try {
       const { limit, offset } = parsePagination(req.query as Record<string, string>);
       const category = typeof req.query.category === 'string' ? req.query.category : undefined;
@@ -128,6 +138,60 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
         });
 
         res.status(201).json(api);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/:id/endpoints/bulk',
+    requireAuth,
+    bodyValidator(bulkEndpointsSchema),
+    async (req, res: Response<unknown, AuthenticatedLocals>, next) => {
+      try {
+        const user = res.locals.authenticatedUser;
+        if (!user) {
+          next(new UnauthorizedError());
+          return;
+        }
+
+        const apiId = Number(req.params.id);
+        if (!Number.isInteger(apiId) || apiId <= 0) {
+          next(new BadRequestError('id must be a positive integer'));
+          return;
+        }
+
+        const developer = await developerRepository.findByUserId(user.id);
+        if (!developer) {
+          next(
+            new BadRequestError(
+              'Developer profile not found. Create a developer profile first.',
+              'DEVELOPER_NOT_FOUND',
+            ),
+          );
+          return;
+        }
+
+        const developerApis = await apiRepository.listByDeveloper(developer.id);
+        const api = developerApis.find((a) => a.id === apiId);
+        if (!api) {
+          next(new NotFoundError('API not found'));
+          return;
+        }
+
+        const payload = bulkEndpointsSchema.parse(req.body);
+        const endpoints = await apiRepository.bulkCreateEndpoints(
+          apiId,
+          payload.endpoints.map((ep) => ({
+            path: ep.path,
+            method: ep.method,
+            price_per_call_usdc: ep.price_per_call_usdc,
+            description: ep.description ?? null,
+          })),
+        );
+
+        res.status(201).json({ endpoints });
       } catch (error) {
         next(error);
       }

@@ -5,15 +5,28 @@ import type {
   LowBalanceAlertData,
   NewApiCallData,
   SettlementCompletedData,
+  InvoiceCreatedData,
+  UsageAnomalyDetectedData,
+  UsageEventCreatedData,
   WebhookPayload,
 } from '../webhooks/webhook.types.js';
+
+export interface FeeAbstractionExecutedData {
+  userId: string;
+  appTokenPaymentTxId: string;
+  feeAccountPublicKey: string;
+  feeStroops: number;
+  feeBumpXdr: string;
+}
 
 export interface CalloraEventPayloadMap {
   new_api_call: NewApiCallData;
   settlement_completed: SettlementCompletedData;
   low_balance_alert: LowBalanceAlertData;
+  invoice_created: InvoiceCreatedData;
+  'usage.anomaly.detected': UsageAnomalyDetectedData;
+  'usage_event.created': UsageEventCreatedData;
 }
-
 export type CalloraEventName = keyof CalloraEventPayloadMap;
 
 export type CalloraEventListener<K extends CalloraEventName> = (
@@ -31,6 +44,9 @@ const createListenerSetMap = (): ListenerSetMap => ({
   new_api_call: new Set<CalloraEventListener<'new_api_call'>>(),
   settlement_completed: new Set<CalloraEventListener<'settlement_completed'>>(),
   low_balance_alert: new Set<CalloraEventListener<'low_balance_alert'>>(),
+  invoice_created: new Set<CalloraEventListener<'invoice_created'>>(),
+  'usage.anomaly.detected': new Set<CalloraEventListener<'usage.anomaly.detected'>>(),
+  'usage_event.created': new Set<CalloraEventListener<'usage_event.created'>>(),
 });
 
 async function handleEvent<K extends CalloraEventName>(
@@ -111,4 +127,13 @@ calloraEvents.on('settlement_completed', (developerId, data) => {
 
 calloraEvents.on('low_balance_alert', (developerId, data) => {
   return handleEvent('low_balance_alert', developerId, data);
+});
+calloraEvents.on('invoice_created', (developerId, data) => {
+  return handleEvent('invoice_created', developerId, data);
+});
+calloraEvents.on('usage.anomaly.detected', (developerId, data) => {
+  return handleEvent('usage.anomaly.detected', developerId, data);
+});
+calloraEvents.on('usage_event.created', (developerId, data) => {
+  return handleEvent('usage_event.created', developerId, data);
 });

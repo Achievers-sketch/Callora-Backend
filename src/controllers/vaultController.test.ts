@@ -1,11 +1,20 @@
 import request from 'supertest';
 import express from 'express';
-import { z } from 'zod';
 import { VaultController } from './vaultController.js';
-import { InMemoryVaultRepository } from '../repositories/vaultRepository.js';
+import { InMemoryVaultRepository, type VaultRepository } from '../repositories/vaultRepository.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { stellarNetworkQuerySchema } from '../validators/networkSchema.js';
+import { requestIdMiddleware } from '../middleware/requestId.js';
+import { UnauthorizedError } from '../errors/index.js';
+
+/**
+ * Asserts the standard error envelope shape `{ code, message, requestId }`.
+ */
+function expectErrorEnvelope(body: unknown, message: string | undefined, code: string): void {
+  expect(body).toMatchObject(message === undefined ? { code } : { message, code });
+  expect(typeof (body as { requestId?: unknown }).requestId).toBe('string');
+}
 
 jest.mock('better-sqlite3', () => {
   return class MockDatabase {
@@ -42,7 +51,7 @@ function createTestApp(vaultRepository: InMemoryVaultRepository, useJwtAuth = fa
             next(new UnauthorizedError('Invalid token', 'INVALID_TOKEN'));
             return;
           }
-        } catch (error) {
+        } catch {
           next(new UnauthorizedError('Invalid token', 'INVALID_TOKEN'));
           return;
         }
@@ -318,7 +327,7 @@ describe('VaultController - getBalance', () => {
       const repository = new InMemoryVaultRepository();
       // Mock repository to throw an error
       const originalFindByUserId = repository.findByUserId;
-      (repository as any).findByUserId = () => Promise.reject(new Error('Database connection failed'));
+      (repository as unknown as VaultRepository).findByUserId = () => Promise.reject(new Error('Database connection failed'));
 
       const app = createTestApp(repository);
       const response = await request(app)

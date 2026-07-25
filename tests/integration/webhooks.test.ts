@@ -19,10 +19,17 @@ var mockLogger = {
   warn: jest.fn(),
   info: jest.fn(),
   debug: jest.fn(),
+  audit: jest.fn(),
 };
 
 jest.mock('../../src/logger.js', () => ({
-  logger: mockLogger,
+  logger: {
+    error: (...args: unknown[]) => mockLogger.error(...args),
+    warn: (...args: unknown[]) => mockLogger.warn(...args),
+    info: (...args: unknown[]) => mockLogger.info(...args),
+    debug: (...args: unknown[]) => mockLogger.debug(...args),
+    audit: (...args: unknown[]) => mockLogger.audit(...args),
+  },
   runWithRequestContext: <T>(_ctx: unknown, callback: () => T): T => callback(),
 }));
 
@@ -237,6 +244,84 @@ describe('Webhook Routes Security Tests', () => {
     });
   });
 
+  describe('POST /api/webhooks/:developerId/rotate-secret', () => {
+    beforeEach(() => {
+      WebhookStore.register({
+        developerId: 'dev-rotate',
+        url: 'https://example.com/webhook',
+        events: ['new_api_call'],
+        secret: 'old-secret',
+        createdAt: new Date(),
+      });
+    });
+
+    it('returns the new secret exactly once, stores previous secret metadata, and audits rotation', async () => {
+      const response = await request(app)
+        .post('/api/webhooks/dev-rotate/rotate-secret')
+        .expect(200);
+
+      expect(response.body.message).toBe('Webhook secret rotated successfully.');
+      expect(response.body.developerId).toBe('dev-rotate');
+      expect(response.body.secret).toMatch(/^[a-f0-9]{64}$/);
+      expect(response.body.previous_expires_at).toBeDefined();
+
+      const serialized = JSON.stringify(response.body);
+      expect(serialized.match(/[a-f0-9]{64}/g)).toHaveLength(1);
+      expect(serialized).not.toContain('old-secret');
+
+      const stored = WebhookStore.get('dev-rotate');
+      expect(stored?.secret_current).toBe(response.body.secret);
+      expect(stored?.secret_previous).toBe('old-secret');
+      expect(stored?.previous_expires_at).toBeInstanceOf(Date);
+
+      expect(mockLogger.audit).toHaveBeenCalledWith(
+        'WEBHOOK_SECRET_ROTATED',
+        'dev-rotate',
+        expect.objectContaining({
+          developerId: 'dev-rotate',
+          previousExpiresAt: response.body.previous_expires_at,
+          hadPreviousSecret: true,
+        }),
+      );
+    });
+
+    it('does not expose current or previous secrets on subsequent GET', async () => {
+      await request(app)
+        .post('/api/webhooks/dev-rotate/rotate-secret')
+        .expect(200);
+
+      const response = await request(app)
+        .get('/api/webhooks/dev-rotate')
+        .expect(200);
+
+      expect(response.body).not.toHaveProperty('secret');
+      expect(response.body).not.toHaveProperty('secret_current');
+      expect(response.body).not.toHaveProperty('secret_previous');
+    });
+
+    it('returns 404 when rotating a missing webhook', async () => {
+      const response = await request(app)
+        .post('/api/webhooks/missing-dev/rotate-secret')
+        .expect(404);
+
+      expect(response.body.code).toBe('WEBHOOK_NOT_FOUND');
+    });
+
+    it('keeps only the immediately previous secret after a double rotation', async () => {
+      const first = await request(app)
+        .post('/api/webhooks/dev-rotate/rotate-secret')
+        .expect(200);
+      const second = await request(app)
+        .post('/api/webhooks/dev-rotate/rotate-secret')
+        .expect(200);
+
+      const stored = WebhookStore.get('dev-rotate');
+      expect(stored?.secret_current).toBe(second.body.secret);
+      expect(stored?.secret_previous).toBe(first.body.secret);
+      expect(stored?.secret_previous).not.toBe('old-secret');
+    });
+  });
+
   describe('DELETE /api/webhooks/:developerId - Authorization', () => {
     beforeEach(() => {
       WebhookStore.register({
@@ -269,6 +354,152 @@ describe('Webhook Routes Security Tests', () => {
 
       expect(response.body.message).toBe('Webhook removed.');
     });
+  });
+});
+
+describe('PATCH /api/webhooks/:developerId/retry-policy - Retry Policy Management', () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    app = buildWebhookApp();
+    WebhookStore.list().forEach(config => {
+      WebhookStore.delete(config.developerId);
+    });
+    jest.clearAllMocks();
+    mockDnsLookup.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
+  });
+
+  it('should update retry policy with valid values', async () => {
+    WebhookStore.register({
+      developerId: 'dev-retry',
+      url: 'https://example.com/webhook',
+      events: ['new_api_call'],
+      secret: 'test-secret',
+      createdAt: new Date(),
+    });
+
+    const response = await request(app)
+      .patch('/api/webhooks/dev-retry/retry-policy')
+      .send({ retryPolicy: { maxRetries: 3, baseDelayMs: 500 } })
+      .expect(200);
+
+    expect(response.body.message).toBe('Webhook retry policy updated successfully.');
+    expect(response.body.retryPolicy).toEqual({ maxRetries: 3, baseDelayMs: 500 });
+    
+    const stored = WebhookStore.get('dev-retry');
+    expect(stored?.retryPolicy?.maxRetries).toBe(3);
+    expect(stored?.retryPolicy?.baseDelayMs).toBe(500);
+    
+    expect(mockLogger.audit).toHaveBeenCalledWith(
+      'WEBHOOK_RETRY_POLICY_UPDATED',
+      'dev-retry',
+      expect.objectContaining({
+        developerId: 'dev-retry',
+        retryPolicy: expect.objectContaining({ maxRetries: 3, baseDelayMs: 500 }),
+      }),
+    );
+  });
+
+  it('should reject invalid maxRetries values', async () => {
+    WebhookStore.register({
+      developerId: 'dev-invalid-retry',
+      url: 'https://example.com/webhook',
+      events: ['new_api_call'],
+      createdAt: new Date(),
+    });
+
+    const response = await request(app)
+      .patch('/api/webhooks/dev-invalid-retry/retry-policy')
+      .send({ retryPolicy: { maxRetries: 15 } })
+      .expect(400);
+
+    expect(response.body.message).toContain('maxRetries must be an integer between 0 and 10');
+    expect(response.body.code).toBe('INVALID_RETRY_POLICY');
+  });
+
+  it('should reject invalid baseDelayMs values', async () => {
+    WebhookStore.register({
+      developerId: 'dev-invalid-delay',
+      url: 'https://example.com/webhook',
+      events: ['new_api_call'],
+      createdAt: new Date(),
+    });
+
+    const response = await request(app)
+      .patch('/api/webhooks/dev-invalid-delay/retry-policy')
+      .send({ retryPolicy: { baseDelayMs: 50 } })
+      .expect(400);
+
+    expect(response.body.message).toContain('baseDelayMs must be an integer between 100 and 60000');
+    expect(response.body.code).toBe('INVALID_RETRY_POLICY');
+  });
+
+  it('should return 404 when updating retry policy for non-existent webhook', async () => {
+    const response = await request(app)
+      .patch('/api/webhooks/non-existent/retry-policy')
+      .send({ retryPolicy: { maxRetries: 2 } })
+      .expect(404);
+
+    expect(response.body.code).toBe('WEBHOOK_NOT_FOUND');
+  });
+
+  it('should allow clearing retry policy with null', async () => {
+    WebhookStore.register({
+      developerId: 'dev-clear-retry',
+      url: 'https://example.com/webhook',
+      events: ['new_api_call'],
+      secret: 'test-secret',
+      retryPolicy: { maxRetries: 5, baseDelayMs: 2000 },
+      createdAt: new Date(),
+    });
+
+    const response = await request(app)
+      .patch('/api/webhooks/dev-clear-retry/retry-policy')
+      .send({})
+      .expect(200);
+
+    expect(response.body.message).toBe('Webhook retry policy updated successfully.');
+  });
+
+  it('should not expose secrets in retry policy update response', async () => {
+    WebhookStore.register({
+      developerId: 'dev-secret-retry',
+      url: 'https://example.com/webhook',
+      events: ['new_api_call'],
+      secret: 'my-secret-key',
+      secret_current: 'current-secret',
+      secret_previous: 'previous-secret',
+      createdAt: new Date(),
+    });
+
+    const response = await request(app)
+      .patch('/api/webhooks/dev-secret-retry/retry-policy')
+      .send({ retryPolicy: { maxRetries: 1 } })
+      .expect(200);
+
+    expect(response.body).not.toHaveProperty('secret');
+    expect(response.body).not.toHaveProperty('secret_current');
+    expect(response.body).not.toHaveProperty('secret_previous');
+  });
+
+  it('should accept partial retry policy updates', async () => {
+    WebhookStore.register({
+      developerId: 'dev-partial-retry',
+      url: 'https://example.com/webhook',
+      events: ['new_api_call'],
+      createdAt: new Date(),
+    });
+
+    const response = await request(app)
+      .patch('/api/webhooks/dev-partial-retry/retry-policy')
+      .send({ retryPolicy: { maxRetries: 7 } })
+      .expect(200);
+
+    expect(response.body.retryPolicy).toEqual({ maxRetries: 7 });
+    
+    const stored = WebhookStore.get('dev-partial-retry');
+    expect(stored?.retryPolicy?.maxRetries).toBe(7);
+    expect(stored?.retryPolicy?.baseDelayMs).toBeUndefined();
   });
 });
 
@@ -315,13 +546,13 @@ describe('Webhook Signature Verification Tests', () => {
     expect(mockFetch).toHaveBeenCalledWith(testConfig.url, {
       method: 'POST',
       body: JSON.stringify(testPayload),
-      headers: {
+      headers: expect.objectContaining({
         'Content-Type': 'application/json',
         'User-Agent': 'Callora-Webhook/1.0',
         'X-Callora-Event': testPayload.event,
         'X-Callora-Timestamp': testPayload.timestamp,
         'X-Callora-Signature': `sha256=${expectedSignature}`,
-      },
+      }),
       signal: expect.any(AbortSignal),
     });
   });
@@ -485,13 +716,13 @@ describe('Webhook Logging Security Tests', () => {
 
     await dispatchWebhook(testConfig, testPayload);
 
-    expect(consoleSpy.log).toHaveBeenCalledWith(
+    expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('[webhook] ✓ Delivered new_api_call to https://example.com/webhook'),
       expect.stringContaining('attempt 1')
     );
 
     // Verify that sensitive data is not logged
-    const logCalls = consoleSpy.log.mock.calls.flat();
+    const logCalls = mockLogger.info.mock.calls.flat();
     const allLoggedText = logCalls.join(' ');
     expect(allLoggedText).not.toContain('sensitive-secret-key');
     expect(allLoggedText).not.toContain('this-should-not-be-logged');
@@ -500,11 +731,16 @@ describe('Webhook Logging Security Tests', () => {
   it('should not log sensitive payload data in error cases', async () => {
     mockFetch.mockRejectedValue(new Error('Network error'));
 
-    await dispatchWebhook(testConfig, testPayload);
+    jest.useFakeTimers();
+    const dispatchPromise = dispatchWebhook(testConfig, testPayload);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await jest.advanceTimersByTimeAsync(1000 * Math.pow(2, attempt));
+    }
+    await dispatchPromise;
 
     // Check that error logs don't contain sensitive information
-    const warnCalls = consoleSpy.warn.mock.calls.flat();
-    const errorCalls = consoleSpy.error.mock.calls.flat();
+    const warnCalls = mockLogger.warn.mock.calls.flat();
+    const errorCalls = mockLogger.error.mock.calls.flat();
     const allLoggedText = [...warnCalls, ...errorCalls].join(' ');
 
     expect(allLoggedText).not.toContain('sensitive-secret-key');
@@ -517,9 +753,14 @@ describe('Webhook Logging Security Tests', () => {
       status: 500,
     });
 
-    await dispatchWebhook(testConfig, testPayload);
+    jest.useFakeTimers();
+    const dispatchPromise = dispatchWebhook(testConfig, testPayload);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await jest.advanceTimersByTimeAsync(1000 * Math.pow(2, attempt));
+    }
+    await dispatchPromise;
 
-    expect(consoleSpy.warn).toHaveBeenCalledWith(
+    expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('[webhook] Non-2xx response (500) for https://example.com/webhook'),
       expect.stringContaining('attempt 1')
     );

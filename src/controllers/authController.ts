@@ -3,7 +3,7 @@ import { RefreshTokenService } from '../services/refreshTokenService.js';
 import type { RefreshTokenRepository } from '../repositories/refreshTokenRepository.js';
 import { logger } from '../logger.js';
 import { UnauthorizedError } from '../errors/index.js';
-import { successEnvelope, getRequestId } from '../lib/envelope.js';
+import { getClientIp, DEFAULT_PROXY_HEADERS } from '../lib/clientIp.js';
 
 export interface AuthControllerOptions {
   refreshTokenService: RefreshTokenService;
@@ -20,7 +20,49 @@ export class AuthController {
   }
 
   /**
-   * Refresh access token using a valid refresh token
+   * Wallet-based login with IP-based rate limiting applied at the route level.
+   * Returns JWT on successful signature verification.
+   *
+   * POST /auth/wallet
+   * Rate limited to 5 requests per minute per IP by loginThrottle middleware.
+   */
+  async walletLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { walletAddress, signature, message } = req.body;
+
+      if (!walletAddress || !signature || !message) {
+        next(new UnauthorizedError('Missing required fields', 'MISSING_AUTH_FIELDS'));
+        return;
+      }
+
+      // Extract client IP for structured logging
+      const clientIp = getClientIp(req, process.env.TRUST_PROXY_HEADERS === 'true', DEFAULT_PROXY_HEADERS);
+
+      logger.info('[AuthController] Wallet login attempt', {
+        walletAddress,
+        clientIp,
+      });
+
+      // TODO: Implement actual Stellar signature verification
+      // This would typically call a service to verify the wallet signature
+      // against the message and derive a user ID for JWT generation
+
+      next(new UnauthorizedError('Wallet login not fully implemented', 'AUTH_NOT_IMPLEMENTED'));
+
+    } catch (error) {
+      logger.error('[AuthController] Error during wallet login', { error });
+      next(new UnauthorizedError('Login failed', 'REFRESH_FAILED'));
+    }
+  }
+
+  /**
+    * Refresh access token using a valid refresh token.
+   *
+   * On success the consumed refresh token is revoked and a fresh token pair
+   * (access + refresh) is returned. Single-use enforcement means a reused
+   * token is an unambiguous theft signal: all tokens for the user are
+   * immediately revoked and the request is rejected with 401.
+   *
    * POST /auth/refresh
    */
   async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -56,11 +98,15 @@ export class AuthController {
         return;
       }
 
-      // Check if token is revoked or expired
+      // Reuse detection — token is already revoked, which means it was
+      // previously rotated. Presenting it again is a theft signal.
+      // Revoke all user tokens and reject the request.
       if (storedToken.isRevoked) {
-        logger.warn('[AuthController] Attempted to use revoked refresh token', {
+        await this.refreshTokenService.handleReuse(storedToken, this.refreshTokenRepository);
+        logger.warn('[AuthController] Theft signal: revoked token presented again — all user tokens revoked', {
           tokenId: tokenPayload.tokenId,
-          userId: tokenPayload.userId
+          userId: tokenPayload.userId,
+          familyId: storedToken.familyId
         });
         next(new UnauthorizedError('Refresh token has been revoked', 'REVOKED_TOKEN'));
         return;
@@ -85,22 +131,24 @@ export class AuthController {
         return;
       }
 
-      // Update last used timestamp
-      await this.refreshTokenRepository.updateLastUsed(storedToken.id, storedToken.userId);
-
-      // Generate new access token
-      const newAccessToken = this.refreshTokenService.refreshAccessToken(
+      // Rotate: revoke consumed token, issue fresh access + refresh token pair
+      // in the same family so the entire lineage is covered by theft detection.
+      const newTokenPair = await this.refreshTokenService.rotateRefreshToken(
+        storedToken,
         storedToken.userId,
-        undefined // walletAddress not available in refresh flow
+        undefined, // walletAddress not available in refresh flow
+        this.refreshTokenRepository
       );
 
-      logger.info('[AuthController] Access token refreshed successfully', {
+      logger.info('[AuthController] Token pair rotated successfully', {
         userId: storedToken.userId,
-        tokenId: storedToken.id
+        consumedTokenId: storedToken.id,
+        familyId: storedToken.familyId
       });
 
-      res.json(successEnvelope({
-        accessToken: newAccessToken,
+      res.json({
+        accessToken: newTokenPair.accessToken,
+        refreshToken: newTokenPair.refreshToken,
         tokenType: 'Bearer'
       }, requestId));
 
@@ -178,8 +226,7 @@ export class AuthController {
    */
   async revokeAllTokens(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      // This endpoint should be protected by requireAuth middleware
-      const userId = (req as any).developerId || res.locals.authenticatedUser?.id;
+      const userId = req.developerId || res.locals.authenticatedUser?.id;
 
       if (!userId) {
         next(new UnauthorizedError('User not authenticated', 'NOT_AUTHENTICATED'));
@@ -206,7 +253,7 @@ export class AuthController {
    */
   async getTokenInfo(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).developerId || res.locals.authenticatedUser?.id;
+      const userId = req.developerId || res.locals.authenticatedUser?.id;
 
       if (!userId) {
         next(new UnauthorizedError('User not authenticated', 'NOT_AUTHENTICATED'));
@@ -219,8 +266,8 @@ export class AuthController {
 
       res.json(successEnvelope({
         activeRefreshTokens: activeTokenCount,
-        maxAllowedTokens: 5 // Configurable limit
-      }, requestId));
+        maxAllowedTokens: 5
+      });
 
     } catch (error) {
       logger.error('[AuthController] Error getting token info', { error });

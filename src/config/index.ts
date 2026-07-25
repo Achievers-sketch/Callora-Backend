@@ -95,8 +95,16 @@ export const config = {
   port: env.PORT,
   nodeEnv: env.NODE_ENV,
   version: env.APP_VERSION,
+  accessLog: {
+    sampleRate: env.ACCESS_LOG_SAMPLE_RATE,
+    redactFields: (env.ACCESS_LOG_REDACT_FIELDS ?? '')
+      .split(',')
+      .map((field) => field.trim())
+      .filter((field) => field.length > 0),
+  },
 
   databaseUrl: env.DATABASE_URL,
+  replicaUrls: env.REPLICA_URLS,
   database: {
     pool: {
       host: env.DB_HOST,
@@ -138,6 +146,15 @@ export const config = {
     maxRequests: env.WEBHOOK_RATE_LIMIT_MAX_REQUESTS ?? env.REST_RATE_LIMIT_MAX_REQUESTS,
   },
 
+  webhooks: {
+    secretRotationGraceMs: env.WEBHOOK_SECRET_ROTATION_GRACE_MS,
+  },
+
+  loginRateLimit: {
+    windowMs: env.LOGIN_RATE_LIMIT_WINDOW_MS,
+    maxRequests: env.LOGIN_RATE_LIMIT_MAX_REQUESTS,
+  },
+
   rateLimiter: {
     maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
     windowMs: env.RATE_LIMIT_WINDOW_MS,
@@ -165,6 +182,9 @@ export const config = {
     intervalMs: env.SETTLEMENT_STATUS_SYNC_INTERVAL_MS,
     timeoutMs: env.SETTLEMENT_STATUS_SYNC_TIMEOUT_MS,
   },
+  settlementRecon: {
+    intervalMs: env.SETTLEMENT_RECON_INTERVAL_MS,
+  },
   revenueLedgerIndexer: {
     intervalMs: env.REVENUE_LEDGER_INDEXER_INTERVAL_MS,
     batchSize: env.REVENUE_LEDGER_INDEXER_BATCH_SIZE,
@@ -189,7 +209,57 @@ export const config = {
   bcrypt: {
     costFactor: env.BCRYPT_COST_FACTOR,
   },
+  billingConcurrency: {
+    maxPerDeveloper: env.BILLING_MAX_CONCURRENCY_PER_DEV,
+    semaphoreTtlMs: env.BILLING_SEMAPHORE_TTL_MS,
+  },
+  routeBodyLimits: env.ROUTE_BODY_LIMITS,
   idempotency: {
     retentionWindowSeconds: env.IDEMPOTENCY_RETENTION_WINDOW_SECONDS,
+    sweeperIntervalMs: env.IDEMPOTENCY_SWEEPER_INTERVAL_MS,
+  },
+  listingsCache: {
+    warmupTimeoutMs: env.LISTINGS_CACHE_WARMUP_TIMEOUT_MS,
+  },
+  bulkEndpointLimit: env.BULK_ENDPOINT_LIMIT,
+  routeBodyLimits: env.ROUTE_BODY_LIMITS,
+
+  slowQueryAlerter: {
+    webhookUrl: env.SLOW_QUERY_ALERT_WEBHOOK_URL,
+    p95ThresholdMs: env.SLOW_QUERY_P95_THRESHOLD_MS,
+    pollIntervalMs: env.SLOW_QUERY_POLL_INTERVAL_MS,
+    dedupWindowMs: env.SLOW_QUERY_DEDUP_WINDOW_SECONDS * 1000,
+  },
+
+  memoryAccounting: {
+    enabled: env.MEMORY_ACCOUNTING_ENABLED,
+    thresholdMb: env.MEMORY_ACCOUNTING_THRESHOLD_MB,
+  },
+
+  usageAnomalyDetector: {
+    enabled: env.USAGE_ANOMALY_DETECTOR_ENABLED,
+    multiplier: env.USAGE_ANOMALY_MULTIPLIER,
+    pollIntervalMs: env.USAGE_ANOMALY_POLL_INTERVAL_MS,
+    windowMs: env.USAGE_ANOMALY_WINDOW_MS,
+    baselineWindows: env.USAGE_ANOMALY_BASELINE_WINDOWS,
+    dedupWindowMs: env.USAGE_ANOMALY_DEDUP_WINDOW_MS ?? env.USAGE_ANOMALY_WINDOW_MS,
+  },
+
+  monthlyInvoiceJob: {
+    intervalMs: env.MONTHLY_INVOICE_JOB_INTERVAL_MS,
+  },
+
+  sloAlert: {
+    enabled: Boolean(env.SLO_ALERT_WEBHOOK_URL) && env.SLO_ROUTE_CONFIGS.length > 0,
+    webhookUrl: env.SLO_ALERT_WEBHOOK_URL,
+    pollIntervalMs: env.SLO_ALERT_POLL_INTERVAL_MS,
+    dedupWindowMs: env.SLO_ALERT_DEDUP_WINDOW_MS,
+    observationWindowMs: env.SLO_ALERT_OBSERVATION_WINDOW_MS,
+    configs: env.SLO_ROUTE_CONFIGS as Array<{
+      method: string;
+      route: string;
+      maxErrorRate?: number;
+      maxLatencyP95Ms?: number;
+    }>,
   },
 } as const;

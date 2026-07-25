@@ -1,8 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import express from 'express';
+import crypto from 'crypto';
 import { validateWebhookUrl, WebhookValidationError } from './webhook.validator.js';
 import { WebhookStore } from './webhook.store.js';
-import { WebhookEventType } from './webhook.types.js';
+import { WebhookEventType, type RetryPolicy } from './webhook.types.js';
 import {
   captureRawBody,
   verifyWebhookSignature,
@@ -10,6 +11,8 @@ import {
 import { AppError, BadRequestError, NotFoundError } from '../errors/index.js';
 import { createRestRateLimitMiddleware } from '../middleware/restRateLimit.js';
 import { config } from '../config/index.js';
+import { logger } from '../logger.js';
+import { validateRetryPolicy } from '../services/webhookRetry.js';
 
 const router = Router();
 
@@ -25,12 +28,17 @@ const VALID_EVENTS: WebhookEventType[] = [
   'new_api_call',
   'settlement_completed',
   'low_balance_alert',
+  'usage_event.created',
 ];
+
+function generateWebhookSecret(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
 
 // POST /api/webhooks — Register a webhook
 router.post('/', webhookMgmtRateLimit, express.json(), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { developerId, url, events, secret } = req.body;
+    const { developerId, url, events, secret, retryPolicy } = req.body;
 
     if (!developerId || !url || !Array.isArray(events) || events.length === 0) {
       throw new BadRequestError(
@@ -49,6 +57,14 @@ router.post('/', webhookMgmtRateLimit, express.json(), async (req: Request, res:
       );
     }
 
+    const validation = validateRetryPolicy(retryPolicy);
+    if (!validation.valid) {
+      throw new BadRequestError(
+        validation.error!,
+        'INVALID_RETRY_POLICY'
+      );
+    }
+
     try {
       await validateWebhookUrl(url);
     } catch (err: unknown) {
@@ -63,7 +79,8 @@ router.post('/', webhookMgmtRateLimit, express.json(), async (req: Request, res:
       developerId,
       url,
       events: events as WebhookEventType[],
-      secret: secret ?? undefined,
+      secret_current: secret ?? undefined,
+      retryPolicy: retryPolicy as RetryPolicy | undefined,
       createdAt: new Date(),
     });
 
@@ -89,14 +106,92 @@ router.get('/:developerId', webhookMgmtRateLimit, (req: Request, res: Response) 
   }
   // Never expose the secret
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { secret: _s, ...safeConfig } = config;
+  const { secret, secret_current, secret_previous, ...safeConfig } = config;
   return res.json(safeConfig);
+});
+
+// POST /api/webhooks/:developerId/rotate-secret — Rotate webhook signing secret
+router.post('/:developerId/rotate-secret', webhookMgmtRateLimit, (req: Request, res: Response) => {
+  const existing = WebhookStore.get(req.params.developerId);
+  if (!existing) {
+    throw new NotFoundError(
+      'No webhook registered for this developer.',
+      'WEBHOOK_NOT_FOUND'
+    );
+  }
+
+  const newSecret = generateWebhookSecret();
+  const previousExpiresAt = new Date(Date.now() + config.webhooks.secretRotationGraceMs);
+  const rotated = WebhookStore.rotateSecret(req.params.developerId, newSecret, previousExpiresAt);
+
+  if (!rotated) {
+    throw new NotFoundError(
+      'No webhook registered for this developer.',
+      'WEBHOOK_NOT_FOUND'
+    );
+  }
+
+  logger.audit('WEBHOOK_SECRET_ROTATED', req.params.developerId, {
+    developerId: req.params.developerId,
+    previousExpiresAt: rotated.previous_expires_at?.toISOString(),
+    hadPreviousSecret: Boolean(existing.secret_current ?? existing.secret),
+  });
+
+  return res.status(200).json({
+    message: 'Webhook secret rotated successfully.',
+    developerId: req.params.developerId,
+    secret: newSecret,
+    previous_expires_at: rotated.previous_expires_at?.toISOString(),
+  });
 });
 
 // DELETE /api/webhooks/:developerId — Remove webhook
 router.delete('/:developerId', webhookMgmtRateLimit, (req: Request, res: Response) => {
   WebhookStore.delete(req.params.developerId);
   return res.json({ message: 'Webhook removed.' });
+});
+
+// PATCH /api/webhooks/:developerId/retry-policy — Update retry policy for subscription
+router.patch('/:developerId/retry-policy', webhookMgmtRateLimit, (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { retryPolicy } = req.body;
+
+    const validation = validateRetryPolicy(retryPolicy);
+    if (!validation.valid) {
+      throw new BadRequestError(
+        validation.error!,
+        'INVALID_RETRY_POLICY'
+      );
+    }
+
+    const updated = WebhookStore.updateRetryPolicy(
+      req.params.developerId,
+      retryPolicy as RetryPolicy | undefined
+    );
+
+    if (!updated) {
+      throw new NotFoundError(
+        'No webhook registered for this developer.',
+        'WEBHOOK_NOT_FOUND'
+      );
+    }
+
+    logger.audit('WEBHOOK_RETRY_POLICY_UPDATED', req.params.developerId, {
+      developerId: req.params.developerId,
+      retryPolicy: updated.retryPolicy,
+    });
+
+    // Never expose the secret
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { secret, secret_current, secret_previous, ...safeConfig } = updated;
+
+    return res.status(200).json({
+      message: 'Webhook retry policy updated successfully.',
+      ...safeConfig,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 /**
@@ -115,7 +210,7 @@ router.post(
   '/deliver/:developerId',
   captureRawBody,
   // Attach the stored secret so verifyWebhookSignature can read it
-  (req: Request & { webhookSecret?: string }, res: Response, next) => {
+  (req: Request & { webhookSecrets?: string[] }, res: Response, next) => {
     const config = WebhookStore.get(req.params.developerId);
     if (!config) {
       next(new NotFoundError(
@@ -124,7 +219,7 @@ router.post(
       ));
       return;
     }
-    req.webhookSecret = config.secret;
+    req.webhookSecrets = WebhookStore.getActiveSecrets(config);
     next();
   },
   verifyWebhookSignature,

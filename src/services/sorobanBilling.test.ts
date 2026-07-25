@@ -89,6 +89,7 @@ describe('SorobanRpcBillingClient', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const firstCall = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     const [, init] = firstCall;
+    assert.equal((init.headers as Record<string, string>)['x-request-id'], 'req-deduct');
     assert.deepEqual(JSON.parse(String(init.body)), {
       jsonrpc: '2.0',
       id: 'req-deduct',
@@ -107,6 +108,33 @@ describe('SorobanRpcBillingClient', () => {
         networkPassphrase: 'Test SDF Network ; September 2015',
       },
     });
+  });
+
+  test('uses active request context for JSON-RPC id and X-Request-Id header', async () => {
+    const fetchImpl = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        result: {
+          value: '42',
+        },
+      }),
+    }));
+    const { runWithRequestContext } = await import('../utils/asyncContext.js');
+
+    const client = createSorobanRpcBillingClient({
+      rpcUrl: 'http://soroban-rpc.internal',
+      contractId: 'contract_abc',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await runWithRequestContext({ requestId: 'req-billing-als' }, async () => {
+      await client.getBalance('user_123');
+    });
+
+    const [, requestInit] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    assert.equal((requestInit.headers as Record<string, string>)['x-request-id'], 'req-billing-als');
+    assert.equal(JSON.parse(String(requestInit.body)).id, 'req-billing-als');
   });
 
   test('normalizes simulation failures returned by Soroban RPC', async () => {
@@ -132,6 +160,39 @@ describe('SorobanRpcBillingClient', () => {
       () => client.deductBalance('user_123', '1000'),
       /insufficient balance/
     );
+  });
+
+  test('attaches structured simulation diagnostics to RPC errors', async () => {
+    const fetchImpl = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        result: {
+          error: {
+            code: 'tx_bad_auth',
+            message: 'auth failed',
+          },
+          events: [{ type: 'diagnostic', account: 'GSECRETACCOUNT' }],
+          footprint: { readWrite: ['ledger-key'], balance: '1000' },
+        },
+      }),
+    })) as unknown as typeof fetch;
+
+    const client = createSorobanRpcBillingClient({
+      rpcUrl: 'http://soroban-rpc.internal',
+      contractId: 'contract_abc',
+      fetchImpl,
+    });
+
+    const err = await client.deductBalance('user_123', '1000').catch((e) => e);
+
+    assert.ok(err instanceof SorobanRpcError);
+    assert.deepEqual(err.simulationDetails, {
+      errorCode: 'tx_bad_auth',
+      errorMessage: 'auth failed',
+      events: [{ type: 'diagnostic', account: '[REDACTED]' }],
+      footprint: { readWrite: ['ledger-key'], balance: '[REDACTED]' },
+    });
   });
 });
 

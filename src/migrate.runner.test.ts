@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { extractPrefix, discoverMigrations } from './migrate.js';
+import { extractPrefix, discoverMigrations, computeChecksum } from './migrate.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -97,6 +97,19 @@ describe('extractPrefix', () => {
   it('ignores leading zeros when parsing the integer', () => {
     expect(extractPrefix('0005_foo.sql')).toBe(5);
     expect(extractPrefix('0010_bar.sql')).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeChecksum
+// ---------------------------------------------------------------------------
+
+describe('computeChecksum', () => {
+  it('produces a stable SHA-256 digest for the tracked schema_versions SQL asset', () => {
+    const assetPath = path.join(process.cwd(), 'drizzle', 'schema-versions.sql');
+
+    expect(fs.existsSync(assetPath)).toBe(true);
+    expect(computeChecksum(assetPath)).toMatch(/^[a-f0-9]{64}$/);
   });
 });
 

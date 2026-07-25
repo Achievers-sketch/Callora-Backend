@@ -1,6 +1,15 @@
 import { RefreshTokenService } from './refreshTokenService.js';
 import jwt from 'jsonwebtoken';
 import { TEST_JWT_SECRET } from '../../tests/helpers/jwt.js';
+import type { RefreshToken } from '../types/auth.js';
+import type { RefreshTokenRepository } from '../repositories/refreshTokenRepository.js';
+
+interface DecodedToken {
+  userId: string;
+  walletAddress?: string;
+  type: string;
+  tokenId?: string;
+}
 
 describe('RefreshTokenService', () => {
   let service: RefreshTokenService;
@@ -26,13 +35,13 @@ describe('RefreshTokenService', () => {
       expect(typeof tokenPair.refreshToken).toBe('string');
 
       // Verify access token
-      const accessDecoded = jwt.verify(tokenPair.accessToken, TEST_JWT_SECRET) as any;
+      const accessDecoded = jwt.verify(tokenPair.accessToken, TEST_JWT_SECRET) as DecodedToken;
       expect(accessDecoded.userId).toBe(userId);
       expect(accessDecoded.walletAddress).toBe(walletAddress);
       expect(accessDecoded.type).toBe('access');
 
       // Verify refresh token
-      const refreshDecoded = jwt.verify(tokenPair.refreshToken, TEST_JWT_SECRET) as any;
+      const refreshDecoded = jwt.verify(tokenPair.refreshToken, TEST_JWT_SECRET) as DecodedToken;
       expect(refreshDecoded.userId).toBe(userId);
       expect(refreshDecoded.type).toBe('refresh');
       expect(refreshDecoded.tokenId).toBeDefined();
@@ -43,7 +52,7 @@ describe('RefreshTokenService', () => {
       
       const tokenPair = service.createTokenPair(userId);
 
-      const accessDecoded = jwt.verify(tokenPair.accessToken, TEST_JWT_SECRET) as any;
+      const accessDecoded = jwt.verify(tokenPair.accessToken, TEST_JWT_SECRET) as DecodedToken;
       expect(accessDecoded.userId).toBe(userId);
       expect(accessDecoded.walletAddress).toBeUndefined();
       expect(accessDecoded.type).toBe('access');
@@ -115,15 +124,22 @@ describe('RefreshTokenService', () => {
 
       const record = service.createRefreshTokenRecord(userId, tokenPair.refreshToken);
 
+      expect(record.id).toBeDefined();
       expect(record.userId).toBe(userId);
       expect(record.tokenHash).toBeDefined();
       expect(record.expiresAt).toBeInstanceOf(Date);
       expect(record.createdAt).toBeInstanceOf(Date);
       expect(record.isRevoked).toBe(false);
+      expect(record.familyId).toBeDefined();
       
       // Verify token hash is correct
       const isHashValid = service.verifyTokenHash(tokenPair.refreshToken, record.tokenHash);
       expect(isHashValid).toBe(true);
+
+      // Verify explicit familyId propagation
+      const specificFamilyId = 'custom-family-uuid';
+      const record2 = service.createRefreshTokenRecord(userId, tokenPair.refreshToken, specificFamilyId);
+      expect(record2.familyId).toBe(specificFamilyId);
     });
 
     it('should throw error for invalid token', () => {
@@ -136,7 +152,7 @@ describe('RefreshTokenService', () => {
   describe('verifyTokenHash', () => {
     it('should verify matching token hashes', () => {
       const token = 'test-token';
-      const hash = (service as any).hashToken(token);
+      const hash = (service as unknown as { hashToken: (t: string) => string }).hashToken(token);
 
       const isValid = service.verifyTokenHash(token, hash);
       expect(isValid).toBe(true);
@@ -144,7 +160,7 @@ describe('RefreshTokenService', () => {
 
     it('should reject non-matching token hashes', () => {
       const token = 'test-token';
-      const wrongHash = (service as any).hashToken('wrong-token');
+      const wrongHash = (service as unknown as { hashToken: (t: string) => string }).hashToken('wrong-token');
 
       const isValid = service.verifyTokenHash(token, wrongHash);
       expect(isValid).toBe(false);
@@ -178,7 +194,7 @@ describe('RefreshTokenService', () => {
 
       expect(typeof accessToken).toBe('string');
 
-      const decoded = jwt.verify(accessToken, TEST_JWT_SECRET) as any;
+      const decoded = jwt.verify(accessToken, TEST_JWT_SECRET) as DecodedToken;
       expect(decoded.userId).toBe(userId);
       expect(decoded.walletAddress).toBe(walletAddress);
       expect(decoded.type).toBe('access');
@@ -189,7 +205,7 @@ describe('RefreshTokenService', () => {
 
       const accessToken = service.refreshAccessToken(userId);
 
-      const decoded = jwt.verify(accessToken, TEST_JWT_SECRET) as any;
+      const decoded = jwt.verify(accessToken, TEST_JWT_SECRET) as DecodedToken;
       expect(decoded.userId).toBe(userId);
       expect(decoded.walletAddress).toBeUndefined();
     });
@@ -198,18 +214,37 @@ describe('RefreshTokenService', () => {
   describe('hashToken', () => {
     it('should create consistent hashes', () => {
       const token = 'test-token';
-      const hash1 = (service as any).hashToken(token);
-      const hash2 = (service as any).hashToken(token);
+      const hash1 = (service as unknown as { hashToken: (t: string) => string }).hashToken(token);
+      const hash2 = (service as unknown as { hashToken: (t: string) => string }).hashToken(token);
 
       expect(hash1).toBe(hash2);
       expect(hash1).toMatch(/^[a-f0-9]{64}$/); // SHA-256 hex
     });
 
     it('should create different hashes for different tokens', () => {
-      const hash1 = (service as any).hashToken('token1');
-      const hash2 = (service as any).hashToken('token2');
+      const hash1 = (service as unknown as { hashToken: (t: string) => string }).hashToken('token1');
+      const hash2 = (service as unknown as { hashToken: (t: string) => string }).hashToken('token2');
 
       expect(hash1).not.toBe(hash2);
+    });
+  });
+  describe('handleReuse', () => {
+    it('should revoke the token family instead of all user tokens', async () => {
+      const storedToken = {
+        id: 'token-123',
+        userId: 'user-456',
+        familyId: 'family-789',
+      } as unknown as RefreshToken;
+
+      const repository = {
+        revokeFamily: jest.fn().mockResolvedValue(undefined),
+        revokeAllUserTokens: jest.fn().mockResolvedValue(undefined),
+      } as unknown as RefreshTokenRepository;
+
+      await service.handleReuse(storedToken, repository);
+
+      expect(repository.revokeFamily).toHaveBeenCalledWith('family-789', 'user-456');
+      expect(repository.revokeAllUserTokens).not.toHaveBeenCalled();
     });
   });
 });

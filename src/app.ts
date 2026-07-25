@@ -1,10 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { z } from 'zod';
 import adminRouter from './routes/admin.js';
+import { createExplainRouter } from './routes/admin/explain.js';
+import { createUsageAnomaliesRouter } from './routes/admin/usage/anomalies.js';
+import { createAdminUsageByEndpointRouter } from './routes/admin/usage/by-endpoint.js';
 import { createApiRouter } from './routes/index.js';
 import { createApisRouter } from './routes/apis.js';
+import { createPluginsRouter } from './routes/marketplace/plugins.js';
 import { pool } from './db.js';
 import {
   InMemoryUsageEventsRepository,
@@ -23,36 +26,42 @@ import {
   type DeveloperRepository,
   findByUserId,
 } from './repositories/developerRepository.js';
-import { apiStatusEnum, type ApiStatus, httpMethodEnum } from './db/schema.js';
+import { defaultSubscriptionRepository } from './repositories/subscriptionRepository.js';
+import { apiStatusEnum, type ApiStatus } from './db/schema.js';
 import type { Developer } from './db/schema.js';
 import { requireAuth, type AuthenticatedLocals } from './middleware/requireAuth.js';
 import { bodyValidator } from './middleware/validate.js';
 import { buildDeveloperAnalytics } from './services/developerAnalytics.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { performHealthCheck, type HealthCheckConfig } from './services/healthCheck.js';
+import { createDependenciesRouter } from './routes/health/dependencies.js';
+import quotaRequestsRouter from './routes/quota/requests.js';
 import { parsePagination, paginatedResponse } from './lib/pagination.js';
 import { InMemoryVaultRepository, type VaultRepository } from './repositories/vaultRepository.js';
 import { DepositController } from './controllers/depositController.js';
 import { VaultController } from './controllers/vaultController.js';
 import { TransactionBuilderService } from './services/transactionBuilder.js';
-import { requestIdMiddleware } from './middleware/requestId.js';
+import { requestIdMiddleware, responseEnrichMiddleware } from './middleware/requestId.js';
+import { createMemoryAccountingMiddleware } from './middleware/memoryAccounting.js';
 import { validate } from './middleware/validate.js';
-import { requestLogger } from './middleware/logging.js';
-import { envelopeValidator } from './middleware/envelopeValidator.js';
-import { createConfiguredRestRateLimitMiddleware } from './middleware/restRateLimit.js';
+import { createAccessLogMiddleware } from './middleware/accessLog.js';
+import { InMemoryRestRateLimiter, createRestRateLimitMiddleware } from './middleware/restRateLimit.js';
+import type { RestRateLimitOptions } from './middleware/restRateLimit.js';
+import { createPerDevConcurrencyMiddleware } from './middleware/perDevConcurrency.js';
+import { auditEnrichMiddleware } from './middleware/auditEnrich.js';
+import { createRouteBodyLimitMiddleware } from './middleware/routeBodyLimit.js';
 import { metricsMiddleware, metricsEndpoint } from './metrics.js';
 import { config } from './config/index.js';
-import { successEnvelope, errorEnvelope, getRequestId } from './lib/envelope.js';
 import {
   BadRequestError,
   ForbiddenError,
-  InternalServerError,
   NotFoundError,
   UnauthorizedError,
 } from './errors/index.js';
-import { apiKeyRepository } from './repositories/apiKeyRepository.js';
 import { apiRegistrationSchema } from './validators/apiRegistration.js';
 import { stellarNetworkQuerySchema } from './validators/networkSchema.js';
+import path from 'path';
+import * as OpenApiValidator from 'express-openapi-validator';
 
 interface AppDependencies {
   usageEventsRepository?: UsageEventsRepository;
@@ -79,16 +88,20 @@ const parseDate = (value: unknown): Date | null => {
   return date;
 };
 
-const vaultBalanceQuerySchema = z.object({
-  network: z.enum(['testnet', 'mainnet']).optional(),
-});
-
 
 
 export const createApp = (dependencies?: Partial<AppDependencies>) => {
   const app = express();
-  const restRateLimit = createConfiguredRestRateLimitMiddleware();
-  
+  const restRateLimitOptions: RestRateLimitOptions = {
+    windowMs: config.restRateLimit.windowMs,
+    maxRequests: config.restRateLimit.maxRequests,
+  };
+  const restRateLimiter = new InMemoryRestRateLimiter(restRateLimitOptions.windowMs, restRateLimitOptions.maxRequests);
+  const restRateLimit = createRestRateLimitMiddleware(restRateLimitOptions, restRateLimiter);
+  const perDevConcurrency = createPerDevConcurrencyMiddleware({
+    maxConcurrent: config.billingConcurrency.maxPerDeveloper,
+    ttlMs: config.billingConcurrency.semaphoreTtlMs,
+  });
   // Set database pool in locals for billing routes
   app.locals.dbPool = pool;
   const usageEventsRepository =
@@ -108,7 +121,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   // Production-safe security headers with environment-based configuration
   const isProduction = process.env.NODE_ENV === 'production';
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
+
   // Apply Helmet with production-safe defaults
   app.use(helmet({
     // Content Security Policy - stricter in production
@@ -141,9 +154,17 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   }));
 
   app.use(requestIdMiddleware);
+  app.use(responseEnrichMiddleware);
+  const memoryAccountingMiddleware = createMemoryAccountingMiddleware(config.memoryAccounting);
+  app.use(memoryAccountingMiddleware);
   app.use(metricsMiddleware);
 
-  app.use(requestLogger);
+  app.use(
+    createAccessLogMiddleware({
+      sampleRate: config.accessLog.sampleRate,
+      redactFields: config.accessLog.redactFields,
+    }),
+  );
 
   // Parse allowed origins with validation
   const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:5173')
@@ -187,8 +208,8 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
       },
       methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: [
-        'Content-Type', 
-        'Authorization', 
+        'Content-Type',
+        'Authorization',
         'x-admin-api-key',
         'x-user-id', // Added for authentication
         'x-request-id' // Added for tracing
@@ -200,8 +221,20 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
     }),
   );
   const requestBodyLimit = process.env.REQUEST_BODY_LIMIT ?? '100kb';
+  app.use(createRouteBodyLimitMiddleware(config.routeBodyLimits));
   app.use(express.json({ limit: requestBodyLimit }));
   app.use(express.urlencoded({ extended: false, limit: requestBodyLimit }));
+  // Attach req.auditContext (IP, UA, tenantId, correlationId, bodyHash) for all routes.
+  app.use(auditEnrichMiddleware);
+
+  // OpenAPI contract validation
+  app.use(
+    OpenApiValidator.middleware({
+      apiSpec: path.resolve(process.cwd(), 'docs/openapi.json'),
+      validateRequests: true,
+      validateResponses: true,
+    }),
+  );
 
   // Register envelope validator after body parser but before routes
   app.use(envelopeValidator);
@@ -240,9 +273,10 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
    *   "timestamp": "..."
    * }
    */
-  app.get('/api/health', async (req, res) => {
-    const requestId = getRequestId(req);
-    
+  // Per-dependency health probe — detailed status for each configured dependency
+  app.use('/api/health/dependencies', createDependenciesRouter(dependencies?.healthCheckConfig));
+
+  app.get('/api/health', async (_req, res) => {
     // If no health check config provided, return simple health check
     if (!dependencies?.healthCheckConfig) {
       const data = { status: 'ok', service: 'callora-backend' };
@@ -274,7 +308,15 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
     }
   });
 
+  // Mounted before the generic admin router so the specific path is not
+  // shadowed by adminRouter's `/usage/:developerId` route.
+  app.use('/api/admin/usage/anomalies', createUsageAnomaliesRouter({ pool }));
+  app.use('/api/admin/usage/by-endpoint', createAdminUsageByEndpointRouter({ pool }));
   app.use('/api/admin', adminRouter);
+  app.use('/api/admin/db/explain', createExplainRouter({ pool }));
+
+  // Quota self-service — developers submit requests, admins manage via /api/admin/quota/requests
+  app.use('/api/quota/requests', quotaRequestsRouter);
 
   // Prometheus metrics endpoint — auth-gated in production
   app.get('/api/metrics', metricsEndpoint);
@@ -287,12 +329,18 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
     }),
   );
 
-  // Mount all routes including billing
-  app.use('/api', createApiRouter({ 
+  // Plugin marketplace — community-developed billing rule plugins
+  app.use('/api/marketplace/plugins', createPluginsRouter());
+
+  // Mount all routes including billing and limits
+  app.use('/api', createApiRouter({
     restRateLimit,
+    restRateLimiter,
+    perDevConcurrency,
     usageEventsRepository,
     apiRepository,
-    developerRepository
+    developerRepository,
+    subscriptionRepository: defaultSubscriptionRepository,
   }));
 
   app.get('/api/developers/apis', requireAuth, async (req, res: express.Response<unknown, AuthenticatedLocals>, next) => {
@@ -438,8 +486,8 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
    *             default: `testnet`
    */
   // Vault balance endpoint
-  app.get('/api/vault/balance', requireAuth, validate({ query: stellarNetworkQuerySchema }), (req, res: express.Response<unknown, AuthenticatedLocals>) => {
-    vaultController.getBalance(req, res);
+  app.get('/api/vault/balance', requireAuth, validate({ query: stellarNetworkQuerySchema }), (req, res: express.Response<unknown, AuthenticatedLocals>, next) => {
+    vaultController.getBalance(req, res, next);
   });
 
   /**
@@ -529,6 +577,30 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
     }
   });
 
+  // OpenAPI validation errors
+  app.use(
+    (
+      err: Error & {
+        status?: number;
+        errors?: unknown[];
+      },
+      _req: express.Request,
+      res: express.Response,
+      next: express.NextFunction,
+    ) => {
+      if (!err.status) {
+        return next(err);
+      }
+
+      res.status(err.status).json({
+        success: false,
+        error: err.message,
+        details: err.errors ?? [],
+      });
+    },
+  );
+
   app.use(errorHandler);
+
   return app;
 };

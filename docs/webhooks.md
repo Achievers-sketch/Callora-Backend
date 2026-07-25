@@ -25,8 +25,9 @@ when specific events occur on the Callora platform.
 | Event                 | Trigger                                   |
 |-----------------------|-------------------------------------------|
 | `new_api_call`        | A developer's API is called               |
-| `settlement_completed`| An on-chain XLM settlement completes      |
+| `settlement_completed`| A USDC revenue settlement completes after DB commit |
 | `low_balance_alert`   | Developer balance drops below threshold   |
+| `usage_event.created` | A usage event is recorded for an API call |
 
 ---
 
@@ -59,7 +60,7 @@ All events POST a JSON body with this structure:
 {
   "settlementId": "settle_001",
   "amount": "25.5000000",
-  "asset": "XLM",
+  "asset": "USDC",
   "txHash": "abc123...",
   "settledAt": "2025-06-10T14:30:00.000Z"
 }
@@ -71,6 +72,20 @@ All events POST a JSON body with this structure:
   "currentBalance": "2.0000000",
   "thresholdBalance": "5.0000000",
   "asset": "XLM"
+}
+```
+
+### `usage_event.created` data
+```json
+{
+  "id": "ue_abc123",
+  "requestId": "req_xyz789",
+  "apiId": "api_456",
+  "endpointId": "ep_789",
+  "developerId": "dev_abc123",
+  "amountUsdc": 25,
+  "statusCode": 200,
+  "timestamp": "2026-07-25T10:00:00.000Z"
 }
 ```
 
@@ -87,12 +102,17 @@ Internal/private IP addresses are blocked. The following ranges are rejected:
 
 ### Signature Verification
 
-If you provide a `secret` during registration, each webhook delivery includes two headers:
+If you provide a `secret` during registration, each webhook delivery includes these headers:
 
 | Header                      | Format              | Description                           |
 |-----------------------------|---------------------|---------------------------------------|
+| `X-Request-Id`              | string              | Correlation ID from the triggering request |
 | `X-Callora-Signature-256`   | `sha256=<hex>`      | HMAC-SHA256 of signed payload         |
 | `X-Callora-Timestamp`       | ISO-8601 timestamp  | Delivery timestamp for replay defense |
+| `X-Callora-Event`           | string              | Event type being delivered |
+| `X-Callora-Delivery`        | UUID                | Unique delivery identifier for idempotency |
+| `User-Agent`                | `Callora-Webhook/1.0` | Identifies Callora as the sender |
+| `Content-Type`              | `application/json`  | Payload content type |
 
 #### Signed Payload Format
 
@@ -115,6 +135,31 @@ For example, if the timestamp is `2026-05-31T10:00:00.000Z` and body is `{"event
 3. **Compute expected signature** — HMAC-SHA256 with your secret
 4. **Timing-safe comparison** — Compare using constant-time method
 5. **Check timestamp** — Reject if outside 5-minute tolerance window (replay protection)
+
+### Signing Secret Rotation
+
+Rotate a webhook signing secret with:
+
+```http
+POST /api/webhooks/:developerId/rotate-secret
+```
+
+The response includes the new secret exactly once:
+
+```json
+{
+  "message": "Webhook secret rotated successfully.",
+  "developerId": "dev_abc123",
+  "secret": "new-secret-value",
+  "previous_expires_at": "2026-06-26T12:00:00.000Z"
+}
+```
+
+During the grace window, signatures made with either the new secret or the
+immediately previous secret are accepted. After `previous_expires_at`, only the
+current secret is accepted. A second rotation replaces the previous secret with
+the formerly current secret. The grace window is configured with
+`WEBHOOK_SECRET_ROTATION_GRACE_MS` and defaults to 24 hours.
 
 #### Example Implementation
 
@@ -201,6 +246,7 @@ After 5 failures, the event is dropped and logged server-side.
 |--------|-----------------------------------|--------------------------|
 | POST   | `/api/webhooks`                   | Register webhook         |
 | GET    | `/api/webhooks/:developerId`      | View current webhook     |
+| POST   | `/api/webhooks/:developerId/rotate-secret` | Rotate signing secret |
 | DELETE | `/api/webhooks/:developerId`      | Remove webhook           |
 
 ---

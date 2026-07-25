@@ -30,7 +30,7 @@ Used when API usage is recorded for a developer.
 
 ### `settlement_completed`
 
-Used when a developer settlement completes successfully.
+Used when a developer settlement completes successfully. Emitted by `RevenueSettlementService` only after settlement status and usage events are committed to the database.
 
 ```ts
 {
@@ -51,6 +51,42 @@ Used when a developer or consumer balance falls below the configured threshold.
   currentBalance: string;
   thresholdBalance: string;
   asset: string;
+}
+```
+
+### `usage.anomaly.detected`
+
+Emitted by the usage anomaly background worker when a developer's latest
+5-minute call volume exceeds the rolling baseline multiplied by the configured
+threshold (default 5×).
+
+```ts
+{
+  windowStart: string;
+  windowEnd: string;
+  currentCalls: number;
+  baselineMean: number;
+  multiplier: number;
+  ratio: number;
+  windowMs: number;
+}
+```
+
+### `usage_event.created`
+
+Emitted when a usage event is successfully recorded for an API call. Provides
+metered usage details for the request that was just processed.
+
+```ts
+{
+  id: string;
+  requestId: string;
+  apiId: string;
+  endpointId: string;
+  developerId: string;
+  amountUsdc: number;
+  statusCode: number;
+  timestamp: string;
 }
 ```
 
@@ -105,5 +141,8 @@ The module registers one built-in listener per documented event:
 - `new_api_call`
 - `settlement_completed`
 - `low_balance_alert`
+- `invoice_created`
+- `usage.anomaly.detected`
+- `usage_event.created`
 
 Each built-in listener resolves matching webhook subscriptions from `WebhookStore` and forwards the typed payload through `dispatchToAll(...)`.

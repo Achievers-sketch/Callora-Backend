@@ -3,7 +3,9 @@ import express from 'express';
 import { createDeveloperRouter } from './developerRoutes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import type { Developer } from '../db/schema.js';
-import type { UpdateDeveloperProfileInput } from '../types/developer.js';
+import type { UpdateDeveloperProfileInput, SettlementStore } from '../types/developer.js';
+import type { UsageStore } from '../types/gateway.js';
+import type { DeveloperRepository } from '../repositories/developerRepository.js';
 
 const mockSettlementStore = {
   create: jest.fn(),
@@ -26,6 +28,7 @@ const makeDeveloper = (overrides: Partial<Developer> = {}): Developer => ({
   website: null,
   description: null,
   category: null,
+  plan_overrides: null,
   created_at: new Date('2026-01-01T00:00:00.000Z'),
   updated_at: new Date('2026-01-01T00:00:00.000Z'),
   ...overrides,
@@ -41,9 +44,9 @@ const app = express();
 app.use(express.json());
 // Mount the router
 app.use('/api/developers', createDeveloperRouter({
-  settlementStore: mockSettlementStore as any,
-  usageStore: mockUsageStore as any,
-  developerRepository: mockDeveloperRepository as any,
+  settlementStore: mockSettlementStore as unknown as SettlementStore,
+  usageStore: mockUsageStore as unknown as UsageStore,
+  developerRepository: mockDeveloperRepository as unknown as DeveloperRepository,
 }));
 // Error handler to catch UnauthorizedError
 app.use(errorHandler);
@@ -227,5 +230,123 @@ describe('PATCH /api/developers/me', () => {
       website: 'https://example.com',
       category: 'developer-tools',
     });
+  });
+});
+
+// ─────────────────────────────────────────────
+// GET /api/developers/exports
+// ─────────────────────────────────────────────
+
+describe('GET /api/developers/exports', () => {
+  const mockReportExporterService = {
+    listExportsForDeveloper: jest.fn(),
+    getSignedUrl: jest.fn(),
+  };
+
+  const exportsApp = express();
+  exportsApp.use(express.json());
+  exportsApp.use(
+    '/api/developers',
+    createDeveloperRouter({
+      settlementStore: mockSettlementStore as unknown as SettlementStore,
+      usageStore: mockUsageStore as unknown as UsageStore,
+      developerRepository: mockDeveloperRepository as unknown as DeveloperRepository,
+      reportExporterService: mockReportExporterService as unknown as import('../services/reportExporter.js').ReportExporterService,
+    }),
+  );
+  exportsApp.use(errorHandler);
+
+  const baseDeveloper = makeDeveloper({ user_id: 'dev-1' });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDeveloperRepository.findByUserId.mockResolvedValue(baseDeveloper);
+    mockReportExporterService.listExportsForDeveloper.mockResolvedValue([]);
+    mockReportExporterService.getSignedUrl.mockReturnValue('https://s3.test/signed-url');
+  });
+
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(exportsApp).get('/api/developers/exports');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 403 when the user has no developer profile', async () => {
+    mockDeveloperRepository.findByUserId.mockResolvedValue(undefined);
+
+    const res = await request(exportsApp)
+      .get('/api/developers/exports')
+      .set('x-user-id', 'no-profile-user');
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('DEVELOPER_NOT_FOUND');
+  });
+
+  it('returns 200 with paginated data array containing the expected fields', async () => {
+    const now = new Date('2026-06-01T12:00:00.000Z');
+    const expires = new Date('2026-06-08T12:00:00.000Z');
+
+    const record = {
+      id: 'rec-1',
+      developerId: 'dev-1',
+      format: 'csv',
+      s3Key: 'daily-exports/dev-1/2026-06-01.csv',
+      exportedAt: now,
+      expiresAt: expires,
+    };
+
+    mockReportExporterService.listExportsForDeveloper.mockResolvedValue([record]);
+    mockReportExporterService.getSignedUrl.mockReturnValue('https://s3.test/signed-url?expires=999');
+
+    const res = await request(exportsApp)
+      .get('/api/developers/exports')
+      .set('x-user-id', 'dev-1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.pagination).toMatchObject({ limit: 20, offset: 0, total: 1 });
+
+    const item = res.body.data[0];
+    expect(item).toMatchObject({
+      id: 'rec-1',
+      format: 'csv',
+      exportedAt: now.toISOString(),
+      expiresAt: expires.toISOString(),
+      downloadUrl: 'https://s3.test/signed-url?expires=999',
+    });
+  });
+
+  it('returns 200 with empty data array when listExportsForDeveloper returns []', async () => {
+    mockReportExporterService.listExportsForDeveloper.mockResolvedValue([]);
+
+    const res = await request(exportsApp)
+      .get('/api/developers/exports')
+      .set('x-user-id', 'dev-1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([]);
+    expect(res.body.pagination).toMatchObject({ total: 0 });
+  });
+
+  it('downloadUrl comes from getSignedUrl return value', async () => {
+    const record = {
+      id: 'rec-2',
+      developerId: 'dev-1',
+      format: 'json',
+      s3Key: 'daily-exports/dev-1/2026-06-01.json',
+      exportedAt: new Date('2026-06-01T12:00:00.000Z'),
+      expiresAt: new Date('2026-06-08T12:00:00.000Z'),
+    };
+
+    mockReportExporterService.listExportsForDeveloper.mockResolvedValue([record]);
+    const expectedUrl = 'https://s3.test/specific-signed-url?sig=abc123';
+    mockReportExporterService.getSignedUrl.mockReturnValue(expectedUrl);
+
+    const res = await request(exportsApp)
+      .get('/api/developers/exports')
+      .set('x-user-id', 'dev-1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].downloadUrl).toBe(expectedUrl);
+    expect(mockReportExporterService.getSignedUrl).toHaveBeenCalledWith(record, expect.any(Number));
   });
 });

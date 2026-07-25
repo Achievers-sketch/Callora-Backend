@@ -31,6 +31,9 @@ describe('calloraEvents', () => {
     expect(calloraEvents.listenerCount('new_api_call')).toBe(1);
     expect(calloraEvents.listenerCount('settlement_completed')).toBe(1);
     expect(calloraEvents.listenerCount('low_balance_alert')).toBe(1);
+    expect(calloraEvents.listenerCount('invoice_created')).toBe(1);
+    expect(calloraEvents.listenerCount('usage.anomaly.detected')).toBe(1);
+    expect(calloraEvents.listenerCount('usage_event.created')).toBe(1);
   });
 
   it('dispatches registered webhook configs with the correct typed payload', async () => {
@@ -127,6 +130,118 @@ describe('calloraEvents', () => {
     expect(mockedDispatchToAll).not.toHaveBeenCalled();
   });
 
+  it('fans out settlement_completed to matching webhook subscribers', async () => {
+    WebhookStore.register({
+      developerId: 'dev_settle',
+      url: 'https://example.com/settlement-webhook',
+      events: ['settlement_completed'],
+      createdAt: new Date(),
+    });
+
+    const payload: CalloraEventPayloadMap['settlement_completed'] = {
+      settlementId: 'stl_abc',
+      amount: '12.5000000',
+      asset: 'USDC',
+      txHash: 'tx_abc',
+      settledAt: '2026-06-10T14:30:00.000Z',
+    };
+
+    expect(calloraEvents.emit('settlement_completed', 'dev_settle', payload)).toBe(true);
+    await flushAsyncListeners();
+
+    expect(mockedDispatchToAll).toHaveBeenCalledTimes(1);
+    expect(mockedDispatchToAll).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          developerId: 'dev_settle',
+          url: 'https://example.com/settlement-webhook',
+        }),
+      ],
+      expect.objectContaining({
+        event: 'settlement_completed',
+        developerId: 'dev_settle',
+        data: payload,
+      }),
+    );
+  });
+
+  it('fans out usage_event.created to matching webhook subscribers', async () => {
+    WebhookStore.register({
+      developerId: 'dev_usage',
+      url: 'https://example.com/usage-webhook',
+      events: ['usage_event.created'],
+      createdAt: new Date(),
+    });
+
+    const payload: CalloraEventPayloadMap['usage_event.created'] = {
+      id: 'ue_abc',
+      requestId: 'req_xyz',
+      apiId: 'api_456',
+      endpointId: 'ep_789',
+      developerId: 'dev_usage',
+      amountUsdc: 25,
+      statusCode: 200,
+      timestamp: '2026-07-25T10:00:00.000Z',
+    };
+
+    expect(calloraEvents.emit('usage_event.created', 'dev_usage', payload)).toBe(true);
+    await flushAsyncListeners();
+
+    expect(mockedDispatchToAll).toHaveBeenCalledTimes(1);
+    expect(mockedDispatchToAll).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          developerId: 'dev_usage',
+          url: 'https://example.com/usage-webhook',
+        }),
+      ],
+      expect.objectContaining({
+        event: 'usage_event.created',
+        developerId: 'dev_usage',
+        data: payload,
+      }),
+    );
+  });
+
+  it('skips webhook dispatch when no subscribers are registered for the event', async () => {
+    const payload: CalloraEventPayloadMap['settlement_completed'] = {
+      settlementId: 'stl_none',
+      amount: '1.0000000',
+      asset: 'USDC',
+      txHash: 'tx_none',
+      settledAt: new Date().toISOString(),
+    };
+
+    expect(calloraEvents.emit('settlement_completed', 'dev_unsubscribed', payload)).toBe(true);
+    await flushAsyncListeners();
+
+    expect(mockedDispatchToAll).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when webhook dispatch fails', async () => {
+    mockedDispatchToAll.mockRejectedValueOnce(new Error('dispatcher unavailable'));
+
+    WebhookStore.register({
+      developerId: 'dev_fail',
+      url: 'https://example.com/webhook',
+      events: ['settlement_completed'],
+      createdAt: new Date(),
+    });
+
+    expect(() =>
+      calloraEvents.emit('settlement_completed', 'dev_fail', {
+        settlementId: 'stl_fail',
+        amount: '5.0000000',
+        asset: 'USDC',
+        txHash: 'tx_fail',
+        settledAt: new Date().toISOString(),
+      }),
+    ).not.toThrow();
+
+    await flushAsyncListeners();
+    expect(mockedDispatchToAll).toHaveBeenCalledTimes(1);
+  });
+
   it('supports typed listeners for each event payload shape', () => {
     const newApiListener: CalloraEventListener<'new_api_call'> = (_developerId, payload) => {
       expect(payload.apiId).toBeDefined();
@@ -143,9 +258,16 @@ describe('calloraEvents', () => {
       expect(payload.thresholdBalance).toBeDefined();
     };
 
+    const usageEventCreatedListener: CalloraEventListener<'usage_event.created'> = (_developerId, payload) => {
+      expect(payload.id).toBeDefined();
+      expect(payload.requestId).toBeDefined();
+      expect(payload.amountUsdc).toBeGreaterThanOrEqual(0);
+    };
+
     const offNewApi = calloraEvents.on('new_api_call', newApiListener);
     const offSettlement = calloraEvents.on('settlement_completed', settlementListener);
     const offLowBalance = calloraEvents.on('low_balance_alert', lowBalanceListener);
+    const offUsageEvent = calloraEvents.on('usage_event.created', usageEventCreatedListener);
 
     calloraEvents.emit('new_api_call', 'dev_1', {
       apiId: 'api_1',
@@ -167,10 +289,21 @@ describe('calloraEvents', () => {
       thresholdBalance: '10.00',
       asset: 'USDC',
     });
+    calloraEvents.emit('usage_event.created', 'dev_1', {
+      id: 'ue_1',
+      requestId: 'req_1',
+      apiId: 'api_1',
+      endpointId: 'ep_1',
+      developerId: 'dev_1',
+      amountUsdc: 25,
+      statusCode: 200,
+      timestamp: new Date().toISOString(),
+    });
 
     offNewApi();
     offSettlement();
     offLowBalance();
+    offUsageEvent();
   });
 
   it('rejects unknown events and wrong payloads at compile time', () => {

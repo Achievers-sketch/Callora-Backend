@@ -79,6 +79,7 @@ const developerProfile: Developer = {
   website: null,
   description: null,
   category: null,
+  plan_overrides: null,
   created_at: new Date(1000),
   updated_at: new Date(1000),
 };
@@ -95,6 +96,7 @@ const sampleApis: Api[] = [
     status: 'active',
     created_at: new Date(1000),
     updated_at: new Date(1000),
+    deleted_at: null,
   },
   {
     id: 102,
@@ -107,6 +109,7 @@ const sampleApis: Api[] = [
     status: 'active',
     created_at: new Date(1000),
     updated_at: new Date(1000),
+    deleted_at: null,
   },
   {
     id: 103,
@@ -119,6 +122,7 @@ const sampleApis: Api[] = [
     status: 'archived',
     created_at: new Date(1000),
     updated_at: new Date(1000),
+    deleted_at: null,
   },
 ];
 
@@ -137,6 +141,7 @@ class FakeApiRepository implements ApiRepository {
       status: api.status ?? 'draft',
       created_at: new Date(1000),
       updated_at: new Date(1000),
+      deleted_at: null,
     };
     this.apis.push(created);
     return created;
@@ -221,6 +226,22 @@ class FakeApiRepository implements ApiRepository {
   async getEndpoints() {
     return [];
   }
+
+  async delete(_id: number) {
+    return false;
+  }
+
+  async restore(id: number): Promise<Api | null> {
+    const index = this.apis.findIndex((api) => api.id === id);
+    if (index === -1) return null;
+    const restored = { ...this.apis[index]!, deleted_at: null, updated_at: new Date() };
+    this.apis[index] = restored;
+    return restored;
+  }
+
+  async bulkCreateEndpoints() {
+    return [];
+  }
 }
 
 const createDeveloperRepository = (profile?: Developer): DeveloperRepository => ({
@@ -241,6 +262,7 @@ const createDeveloperRepository = (profile?: Developer): DeveloperRepository => 
       website: null,
       description: null,
       category: null,
+      plan_overrides: null,
       created_at: new Date(),
       updated_at: new Date(),
     };
@@ -676,7 +698,7 @@ test('GET /api/apis/:id returns api with empty endpoints list', async () => {
 // POST /api/developers/apis — publish a new API
 // ---------------------------------------------------------------------------
 
-const mockDeveloper = { id: 42, user_id: 'dev-1', name: 'Alice', website: null, description: null, category: null, created_at: new Date(), updated_at: new Date() };
+const mockDeveloper = { id: 42, user_id: 'dev-1', name: 'Alice', website: null, description: null, category: null, plan_overrides: null, created_at: new Date(), updated_at: new Date() };
 
 const validApiBody = {
   name: 'My Weather API',
@@ -708,6 +730,7 @@ const makeApp = (hasDeveloper = true) =>
       status: input.status ?? 'draft',
       created_at: new Date(),
       updated_at: new Date(),
+      deleted_at: null,
       endpoints: input.endpoints.map((ep, idx) => ({
         id: idx + 1,
         api_id: 1,
@@ -731,7 +754,7 @@ test('POST /api/developers/apis returns 401 when unauthenticated', async () => {
 test('POST /api/developers/apis returns 400 when name is missing', async () => {
   const app = makeApp();
   const body = { ...validApiBody };
-  delete (body as any).name;
+  delete (body as Record<string, unknown>).name;
   const res = await request(app)
     .post('/api/developers/apis')
     .set('x-user-id', 'dev-1')
@@ -744,7 +767,7 @@ test('POST /api/developers/apis returns 400 when name is missing', async () => {
 test('POST /api/developers/apis returns 400 when base_url is missing', async () => {
   const app = makeApp();
   const body = { ...validApiBody };
-  delete (body as any).base_url;
+  delete (body as Record<string, unknown>).base_url;
   const res = await request(app)
     .post('/api/developers/apis')
     .set('x-user-id', 'dev-1')
@@ -768,7 +791,7 @@ test('POST /api/developers/apis returns 400 when base_url is not a valid URL', a
 test('POST /api/developers/apis returns 400 when category is missing', async () => {
   const app = makeApp();
   const body = { ...validApiBody };
-  delete (body as any).category;
+  delete (body as Record<string, unknown>).category;
   const res = await request(app)
     .post('/api/developers/apis')
     .set('x-user-id', 'dev-1')
@@ -1239,7 +1262,14 @@ describe('OpenAPI 3.1 Spec Served Route and Validation', () => {
     // Express app stack paths
     const registeredRoutes: string[] = [];
     
-    function extractRoutes(stack: any[], prefix = '') {
+    interface ExpressLayer {
+      route?: { path: string };
+      name?: string;
+      handle?: { stack?: ExpressLayer[] };
+      regexp?: { toString(): string };
+    }
+
+    function extractRoutes(stack: ExpressLayer[], prefix = '') {
       for (const layer of stack) {
         if (layer.route) {
           const path = (prefix + layer.route.path).replace(/\/+/g, '/');

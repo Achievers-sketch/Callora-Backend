@@ -1,3 +1,11 @@
+import {
+  extractSimulationDetails,
+  type SimulationDetails,
+} from '../lib/simulationDiagnostics.js';
+import { withSorobanLatencyWrapper } from '../../tests/chaos/sorobanLatency.js';
+import { env } from '../config/env.js';
+import { getOrCreateRequestId } from '../utils/asyncContext.js';
+
 export interface SorobanBillingInvocationArg {
   type: 'string' | 'i128';
   value: string;
@@ -57,11 +65,17 @@ export type SorobanRpcErrorCategory =
 
 export class SorobanRpcError extends Error {
   public readonly category: SorobanRpcErrorCategory;
+  public readonly simulationDetails?: SimulationDetails;
 
-  constructor(message: string, category: SorobanRpcErrorCategory) {
+  constructor(
+    message: string,
+    category: SorobanRpcErrorCategory,
+    simulationDetails?: SimulationDetails
+  ) {
     super(message);
     this.name = 'SorobanRpcError';
     this.category = category;
+    this.simulationDetails = simulationDetails;
     Object.setPrototypeOf(this, SorobanRpcError.prototype);
   }
 }
@@ -246,7 +260,7 @@ export class SorobanRpcBillingClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly options: SorobanBillingClientOptions) {
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? (env.SOROBAN_CHAOS ? withSorobanLatencyWrapper(fetch) : fetch);
   }
 
   async getBalance(userId: string): Promise<SorobanBalanceResponse> {
@@ -284,9 +298,11 @@ export class SorobanRpcBillingClient {
   }
 
   private async invoke(invocation: SorobanBillingInvocation): Promise<Record<string, unknown>> {
+    const requestId = this.options.requestIdFactory?.() ??
+      getOrCreateRequestId(() => `billing-${Date.now()}`);
     const requestBody: SorobanBillingRpcRequest = {
       jsonrpc: '2.0',
-      id: this.options.requestIdFactory?.() ?? `billing-${Date.now()}`,
+      id: requestId,
       method: 'simulateTransaction',
       params: {
         invocation,
@@ -306,6 +322,7 @@ export class SorobanRpcBillingClient {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
+          'x-request-id': requestId,
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
@@ -320,7 +337,11 @@ export class SorobanRpcBillingClient {
       const simulationError = extractSimulationError(payload);
       if (simulationError) {
         const message = normalizeSorobanBillingError(simulationError, 'Simulation failed');
-        throw new SorobanRpcError(message, classifyError(message));
+        throw new SorobanRpcError(
+          message,
+          classifyError(message),
+          extractSimulationDetails(payload)
+        );
       }
 
       const result = extractRpcResult(payload);

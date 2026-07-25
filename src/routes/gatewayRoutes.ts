@@ -1,18 +1,85 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual, createHash } from 'node:crypto';
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
-import { startUpstreamTimer, type UpstreamOutcome } from '../metrics.js';
+import { startUpstreamTimer, getUpstreamHealth, type UpstreamOutcome } from '../metrics.js';
 import { validate } from '../middleware/validate.js';
-import type { GatewayDeps } from '../types/gateway.js';
+import { getTokenRevocationService } from '../services/tokenRevocation.js';
+import type { GatewayDeps, ApiKey } from '../types/gateway.js';
 import { buildHopByHopSet } from '../lib/hopByHop.js';
+import { defaultUsageSseBroadcaster } from './usage/sse.js';
+import { getDefaultBreakerRegistry, CircuitBreakerState } from '../lib/circuitBreaker.js';
 import {
   BadGatewayError,
   ForbiddenError,
   GatewayTimeoutError,
+  NotFoundError,
   PaymentRequiredError,
   TooManyRequestsError,
   UnauthorizedError,
 } from '../errors/index.js';
+import { getOrCreateRequestId } from '../utils/asyncContext.js';
+
+/** Length of the key prefix used for candidate pre-filtering (matches repository). */
+const API_KEY_PREFIX_LENGTH = 16;
+
+/**
+ * Derive the SHA-256 hex digest of an API key value.
+ * This matches the hash strategy used by createMapBackedGatewayApiKeyAuthMiddleware.
+ */
+function sha256Hex(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+/**
+ * Constant-time string equality check.
+ * Buffers are always the same length (padded to the longer) so the comparison
+ * time is not a function of where the strings diverge — no timing oracle.
+ */
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Resolve an API key string to its registered record using prefix-based
+ * candidate filtering followed by constant-time hash comparison.
+ *
+ * Returns:
+ *  - `{ record }` on a valid match
+ *  - `{ error: 'not_found' }` when no candidate shares the prefix
+ *  - `{ error: 'hash_mismatch' }` when a prefix was found but the hash did not
+ *    match — callers MUST map both error variants to the same 401 response so
+ *    the difference is never observable externally.
+ *
+ * The explicit `hash_mismatch` discriminant exists purely for internal
+ * observability (logging, metrics) without leaking any information to clients.
+ */
+function resolveApiKey(
+  apiKeyHeader: string,
+  apiKeys: Map<string, ApiKey>,
+): { record: ApiKey } | { error: 'not_found' | 'hash_mismatch' } {
+  const prefix = apiKeyHeader.slice(0, API_KEY_PREFIX_LENGTH);
+  const inboundHash = sha256Hex(apiKeyHeader);
+
+  let prefixFound = false;
+
+  for (const [rawKey, record] of apiKeys) {
+    if (!timingSafeStringEqual(rawKey.slice(0, API_KEY_PREFIX_LENGTH), prefix)) {
+      continue;
+    }
+    // At least one candidate shares the prefix.
+    prefixFound = true;
+
+    const storedHash = sha256Hex(rawKey);
+    if (timingSafeStringEqual(inboundHash, storedHash)) {
+      return { record };
+    }
+  }
+
+  return { error: prefixFound ? 'hash_mismatch' : 'not_found' };
+}
 
 const CREDIT_COST_PER_CALL = 1;
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -22,8 +89,39 @@ const apiIdParamsSchema = z.object({
   apiId: z.string().min(1, 'API ID is required').max(50, 'API ID too long'),
 });
 
+// ── In-memory health cache ─────────────────────────────────────────────────
+//
+// Keyed by apiSlug, stores the response data along with the timestamp it was
+// computed. Cached entries are considered fresh for 5 seconds to avoid
+// re-computing percentiles on every request.
+// ────────────────────────────────────────────────────────────────────────────
+
+interface HealthCacheEntry {
+  data: {
+    apiSlug: string;
+    latency: { p50: number | null; p95: number | null };
+    breaker: { state: 'closed' | 'open' | 'half-open' };
+  };
+  timestamp: number;
+}
+
+const HEALTH_CACHE_TTL_MS = 5_000;
+const healthCache = new Map<string, HealthCacheEntry>();
+
+function mapBreakerState(state: CircuitBreakerState): 'closed' | 'open' | 'half-open' {
+  switch (state) {
+    case CircuitBreakerState.CLOSED:
+      return 'closed';
+    case CircuitBreakerState.OPEN:
+      return 'open';
+    case CircuitBreakerState.HALF_OPEN:
+      return 'half-open';
+  }
+}
+
 export function createGatewayRouter(deps: GatewayDeps): Router {
-  const { billing, rateLimiter, usageStore, upstreamUrl } = deps;
+  const { billing, rateLimiter, usageStore, upstreamUrl, registry } = deps;
+  const breakerRegistry = deps.breakerRegistry ?? getDefaultBreakerRegistry();
   const apiKeys = deps.apiKeys ?? new Map();
   const maxBodySize = deps.maxBodySize ?? DEFAULT_MAX_BODY_SIZE;
   const router = Router();
@@ -34,25 +132,106 @@ export function createGatewayRouter(deps: GatewayDeps): Router {
   router.use(express.json({ limit: maxBodySize }));
   router.use(express.urlencoded({ extended: false, limit: maxBodySize }));
 
+  // ── Gateway health endpoint ──────────────────────────────────────────────
+  //
+  // GET /health/:apiSlug
+  //
+  // Public endpoint (no auth) that returns per-API latency percentiles and
+  // circuit breaker state. Only aggregated upstream metrics are exposed — no
+  // tenant identifiers, request paths, or raw histogram buckets are returned.
+  //
+  // Results are cached in-memory for 5 seconds to avoid re-computing
+  // percentiles on every request.
+  // ──────────────────────────────────────────────────────────────────────────
+  router.get('/health/:apiSlug', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { apiSlug } = req.params;
+
+      // Resolve slug to API id for histogram lookups
+      // The histogram uses api_id (the numeric/database ID) as the label,
+      // not the human-readable slug. We resolve via the registry if available.
+      let apiId = apiSlug;
+      if (registry) {
+        const entry = registry.resolve(apiSlug);
+        if (!entry) {
+          next(new NotFoundError('API not found'));
+          return;
+        }
+        apiId = entry.id;
+      }
+
+      // Check in-memory cache (keyed by apiSlug for stable caching regardless of ID resolution)
+      const cached = healthCache.get(apiSlug);
+      if (cached && Date.now() - cached.timestamp < HEALTH_CACHE_TTL_MS) {
+        res.json(cached.data);
+        return;
+      }
+
+      // Compute fresh data
+      // getUpstreamHealth returns values in seconds; convert to milliseconds for the API response
+      const rawLatency = await getUpstreamHealth(apiId);
+      const latency = {
+        p50: rawLatency.p50 !== null ? Math.round(rawLatency.p50 * 1000 * 100) / 100 : null,
+        p95: rawLatency.p95 !== null ? Math.round(rawLatency.p95 * 1000 * 100) / 100 : null,
+      };
+      const breakerState = await breakerRegistry.getState(apiSlug);
+
+      const data = {
+        apiSlug,
+        latency,
+        breaker: { state: mapBreakerState(breakerState) },
+      };
+
+      // Store in cache
+      healthCache.set(apiSlug, { data, timestamp: Date.now() });
+
+      res.json(data);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ── Existing proxy route ─────────────────────────────────────────────────
+
   router.all(
     '/:apiId',
     validate({ params: apiIdParamsSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const apiKeyHeader = req.headers['x-api-key'] as string | undefined;
-        const requestId = randomUUID();
+        const requestId = req.id || getOrCreateRequestId(randomUUID);
 
         if (!apiKeyHeader) {
           next(new UnauthorizedError('Unauthorized: missing x-api-key header'));
           return;
         }
 
-        const keyRecord = apiKeys.get(apiKeyHeader);
-        if (!keyRecord || keyRecord.apiId !== req.params.apiId) {
+        // Use prefix-based candidate lookup + constant-time hash comparison so
+        // that a prefix match with a wrong hash produces a clean 401 instead of
+        // propagating an unhandled exception as a 500. Both 'not_found' and
+        // 'hash_mismatch' intentionally map to the same generic 401 message so
+        // clients cannot distinguish the two cases (no timing oracle).
+        const resolved = resolveApiKey(apiKeyHeader, apiKeys);
+        if ('error' in resolved) {
           next(new UnauthorizedError('Unauthorized: invalid API key'));
           return;
         }
 
+        const keyRecord = resolved.record;
+        if (keyRecord.apiId !== req.params.apiId) {
+          next(new UnauthorizedError('Unauthorized: invalid API key'));
+          return;
+        }
+
+        // Check in-memory revocation list for immediate invalidation
+        const tokenRevocationService = getTokenRevocationService();
+        const apiKeyHash = sha256Hex(apiKeyHeader);
+        if (tokenRevocationService.isRevoked(apiKeyHash)) {
+          next(new ForbiddenError('Forbidden: API key has been revoked'));
+          return;
+        }
+
+        // Also check persisted revoked flag
         if (keyRecord.revoked) {
           next(new ForbiddenError('Forbidden: API key has been revoked'));
           return;
@@ -130,7 +309,7 @@ export function createGatewayRouter(deps: GatewayDeps): Router {
           }
         }
 
-        await usageStore.record({
+        const recorded = await usageStore.record({
           id: randomUUID(),
           requestId,
           apiKey: apiKeyHeader,
@@ -142,6 +321,21 @@ export function createGatewayRouter(deps: GatewayDeps): Router {
           statusCode: upstreamStatus,
           timestamp: new Date().toISOString(),
         });
+
+        if (recorded) {
+          defaultUsageSseBroadcaster.emitForUser(keyRecord.developerId, {
+            id: randomUUID(),
+            requestId,
+            apiKey: apiKeyHeader,
+            apiKeyId: keyRecord.key,
+            apiId: keyRecord.apiId,
+            endpointId: 'legacy',
+            userId: keyRecord.developerId,
+            amountUsdc: CREDIT_COST_PER_CALL,
+            statusCode: upstreamStatus,
+            timestamp: new Date().toISOString(),
+          });
+        }
 
         res.set('x-request-id', requestId);
         // Forward safe upstream response headers (hop-by-hop already stripped above)
@@ -167,4 +361,9 @@ export function createGatewayRouter(deps: GatewayDeps): Router {
   );
 
   return router;
+}
+
+/** Exposed for testing — clears the in-memory health cache. */
+export function clearHealthCache(): void {
+  healthCache.clear();
 }

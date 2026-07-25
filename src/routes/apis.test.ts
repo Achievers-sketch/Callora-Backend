@@ -8,9 +8,38 @@ jest.mock('better-sqlite3', () => {
 
 import express from 'express';
 import request from 'supertest';
+import { createAccessLogMiddleware } from '../middleware/accessLog.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { logger } from '../middleware/logging.js';
 import { InMemoryApiRepository } from '../repositories/apiRepository.js';
+import type { Api, Developer } from '../db/schema.js';
+import type { DeveloperRepository } from '../repositories/developerRepository.js';
 import { createApisRouter } from './apis.js';
+import { createRateLimitMiddleware } from '../middleware/rateLimit.js';
+
+const developerProfile: Developer = {
+  id: 11,
+  user_id: 'dev-1',
+  name: 'Test Developer',
+  website: null,
+  description: null,
+  category: null,
+  plan_overrides: null,
+  created_at: new Date(1000),
+  updated_at: new Date(1000),
+};
+
+const developerRepository: DeveloperRepository = {
+  async findByUserId(userId: string) {
+    return userId === developerProfile.user_id ? developerProfile : undefined;
+  },
+  async getOrCreateByUserId(userId: string) {
+    return userId === developerProfile.user_id ? developerProfile : { ...developerProfile, id: 999, user_id: userId };
+  },
+  async upsertProfile(_userId: string) {
+    return developerProfile;
+  },
+};
 
 describe('createApisRouter', () => {
   function buildApp() {
@@ -61,7 +90,7 @@ describe('createApisRouter', () => {
     );
 
     const app = express();
-    app.use('/api/apis', createApisRouter({ apiRepository: repo }));
+    app.use('/api/apis', createApisRouter({ apiRepository: repo, developerRepository }));
     app.use(errorHandler);
     return app;
   }
@@ -102,6 +131,29 @@ describe('createApisRouter', () => {
     expect(res.body.data[0].status).toBe('draft');
   });
 
+  it('uses the request correlation id in access logs for API routes', async () => {
+    const infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+    const repo = new InMemoryApiRepository([], new Map());
+    const app = express();
+    app.use(createAccessLogMiddleware({ random: () => 0 }));
+    app.use('/api/apis', createApisRouter({ apiRepository: repo, developerRepository }));
+    app.use(errorHandler);
+
+    try {
+      const res = await request(app).get('/api/apis').set('x-correlation-id', 'corr-route-123');
+
+      expect(res.status).toBe(200);
+      expect(infoSpy).toHaveBeenCalled();
+      expect(infoSpy.mock.calls[0][0]).toEqual(
+        expect.objectContaining({
+          correlationId: 'corr-route-123',
+        }),
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
   it('rejects unknown status filters with 400', async () => {
     const app = buildApp();
 
@@ -119,5 +171,198 @@ describe('createApisRouter', () => {
     expect(res.status).toBe(200);
     expect(res.body.meta).toEqual({ total: 1, limit: 1, offset: 0 });
     expect(res.body.data).toHaveLength(1);
+  });
+
+  it('returns 429 once the per-user limit for the API router is exceeded', async () => {
+    const repo = new InMemoryApiRepository(
+      [
+        {
+          id: 1,
+          name: 'Weather API',
+          description: 'Provides weather data',
+          base_url: 'https://api.weather.test',
+          logo_url: null,
+          category: 'weather',
+          status: 'active',
+          developer: {
+            name: 'Acme Corp',
+            website: 'https://acme.test',
+            description: 'Leading data provider',
+          },
+        },
+      ],
+      new Map(),
+    );
+
+    const app = express();
+    app.use('/api/apis', createApisRouter({
+      apiRepository: repo,
+      developerRepository,
+      rateLimitMiddleware: createRateLimitMiddleware({ windowMs: 60_000, maxRequests: 1 }),
+    }));
+    app.use(errorHandler);
+
+    await request(app).get('/api/apis').set('x-user-id', 'user-1').expect(200);
+    const res = await request(app).get('/api/apis').set('x-user-id', 'user-1');
+
+    expect(res.status).toBe(429);
+    expect(res.body.code).toBe('TOO_MANY_REQUESTS');
+    expect(res.headers['retry-after']).toBe('60');
+  });
+});
+
+describe('POST /api/apis/:id/endpoints/bulk', () => {
+  function buildBulkApp() {
+    const ownedApi: Api = {
+      id: 101,
+      developer_id: 11,
+      name: 'Search API',
+      description: null,
+      base_url: 'https://search.example.com',
+      logo_url: null,
+      category: 'search',
+      status: 'active',
+      created_at: new Date(1000),
+      updated_at: new Date(1000),
+      deleted_at: null,
+    };
+
+    const unownedApi: Api = {
+      id: 202,
+      developer_id: 99,
+      name: 'Other API',
+      description: null,
+      base_url: 'https://other.example.com',
+      logo_url: null,
+      category: 'payments',
+      status: 'active',
+      created_at: new Date(1000),
+      updated_at: new Date(1000),
+      deleted_at: null,
+    };
+
+    const repo = new InMemoryApiRepository(
+      [ownedApi, unownedApi],
+      new Map([[101, []]]),
+    );
+
+    const app = express();
+    app.use(express.json());
+    app.use('/api/apis', createApisRouter({ apiRepository: repo, developerRepository }));
+    app.use(errorHandler);
+    return app;
+  }
+
+  it('returns 401 without authentication', async () => {
+    const app = buildBulkApp();
+    const res = await request(app)
+      .post('/api/apis/101/endpoints/bulk')
+      .send({ endpoints: [{ path: '/test', method: 'GET', price_per_call_usdc: '0.01' }] });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 400 when id is not a positive integer', async () => {
+    const app = buildBulkApp();
+    const res = await request(app)
+      .post('/api/apis/abc/endpoints/bulk')
+      .set('x-user-id', 'dev-1')
+      .send({ endpoints: [{ path: '/test', method: 'GET', price_per_call_usdc: '0.01' }] });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 when the API does not belong to the developer', async () => {
+    const app = buildBulkApp();
+    const res = await request(app)
+      .post('/api/apis/202/endpoints/bulk')
+      .set('x-user-id', 'dev-1')
+      .send({ endpoints: [{ path: '/test', method: 'GET', price_per_call_usdc: '0.01' }] });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 with empty endpoints array', async () => {
+    const app = buildBulkApp();
+    const res = await request(app)
+      .post('/api/apis/101/endpoints/bulk')
+      .set('x-user-id', 'dev-1')
+      .send({ endpoints: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when endpoint data is invalid', async () => {
+    const app = buildBulkApp();
+    const res = await request(app)
+      .post('/api/apis/101/endpoints/bulk')
+      .set('x-user-id', 'dev-1')
+      .send({ endpoints: [{ path: '', method: 'INVALID', price_per_call_usdc: '-1' }] });
+    expect(res.status).toBe(400);
+  });
+
+  it('creates endpoints and returns per-row results', async () => {
+    const app = buildBulkApp();
+    const payload = {
+      endpoints: [
+        { path: '/search', method: 'GET', price_per_call_usdc: '0.05', description: 'Search endpoint' },
+        { path: '/lookup', method: 'POST', price_per_call_usdc: '0.10' },
+      ],
+    };
+
+    const res = await request(app)
+      .post('/api/apis/101/endpoints/bulk')
+      .set('x-user-id', 'dev-1')
+      .send(payload);
+
+    expect(res.status).toBe(201);
+    expect(res.body.endpoints).toHaveLength(2);
+
+    const ep1 = res.body.endpoints[0];
+    expect(ep1.path).toBe('/search');
+    expect(ep1.method).toBe('GET');
+    expect(ep1.price_per_call_usdc).toBe('0.05');
+    expect(ep1.description).toBe('Search endpoint');
+    expect(typeof ep1.id).toBe('number');
+    expect(ep1.api_id).toBe(101);
+
+    const ep2 = res.body.endpoints[1];
+    expect(ep2.path).toBe('/lookup');
+    expect(ep2.method).toBe('POST');
+    expect(ep2.price_per_call_usdc).toBe('0.10');
+    expect(ep2.description).toBeNull();
+    expect(typeof ep2.id).toBe('number');
+    expect(ep2.api_id).toBe(101);
+  });
+
+  it('rejects more than 50 endpoints', async () => {
+    const app = buildBulkApp();
+    const manyEndpoints = Array.from({ length: 51 }, (_, i) => ({
+      path: `/endpoint/${i}`,
+      method: 'GET' as const,
+      price_per_call_usdc: '0.01',
+    }));
+
+    const res = await request(app)
+      .post('/api/apis/101/endpoints/bulk')
+      .set('x-user-id', 'dev-1')
+      .send({ endpoints: manyEndpoints });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('persists endpoints that can be retrieved via GET /:id', async () => {
+    const app = buildBulkApp();
+
+    const createRes = await request(app)
+      .post('/api/apis/101/endpoints/bulk')
+      .set('x-user-id', 'dev-1')
+      .send({ endpoints: [{ path: '/persist', method: 'GET', price_per_call_usdc: '0.02' }] });
+
+    expect(createRes.status).toBe(201);
+
+    const getRes = await request(app).get('/api/apis/101');
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.endpoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: '/persist', method: 'GET', price_per_call_usdc: '0.02' }),
+      ]),
+    );
   });
 });
