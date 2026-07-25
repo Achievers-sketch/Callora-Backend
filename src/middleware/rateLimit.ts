@@ -2,15 +2,17 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { getClientIp } from '../lib/clientIp.js';
 import { logger } from '../logger.js';
 import { resolveRequestUserId } from './requireAuth.js';
+import { errorEnvelope } from '../lib/envelope.js';
+import { getRequestId } from '../lib/envelope.js';
 
 export interface RateLimitOptions {
   windowMs: number;
   maxRequests: number;
 }
 
-interface RateLimitBucket {
-  count: number;
-  resetAt: number;
+interface TokenBucket {
+  tokens: number;
+  lastRefill: number;
 }
 
 export interface RateLimitCheckResult {
@@ -18,8 +20,45 @@ export interface RateLimitCheckResult {
   retryAfterMs?: number;
 }
 
+function computeTokenBucketResult(
+  bucket: TokenBucket | undefined,
+  maxRequests: number,
+  windowMs: number,
+  now: number,
+): { bucket: TokenBucket; result: RateLimitCheckResult } {
+  const currentBucket = bucket
+    ? { ...bucket }
+    : { tokens: maxRequests, lastRefill: now };
+
+  const elapsed = now - currentBucket.lastRefill;
+
+  if (elapsed >= windowMs) {
+    currentBucket.tokens = maxRequests;
+    currentBucket.lastRefill = now;
+  }
+
+  if (currentBucket.tokens <= 0) {
+    const retryAfterMs = Math.max(
+      windowMs - (now - currentBucket.lastRefill),
+      0,
+    );
+
+    return {
+      bucket: currentBucket,
+      result: { allowed: false, retryAfterMs },
+    };
+  }
+
+  currentBucket.tokens -= 1;
+
+  return {
+    bucket: currentBucket,
+    result: { allowed: true },
+  };
+}
+
 export class InMemoryRateLimiter {
-  private readonly buckets = new Map<string, RateLimitBucket>();
+  private readonly buckets = new Map<string, TokenBucket>();
 
   constructor(
     private readonly windowMs: number,
@@ -27,25 +66,16 @@ export class InMemoryRateLimiter {
   ) {}
 
   check(key: string, now = Date.now()): RateLimitCheckResult {
-    const bucket = this.buckets.get(key);
+    const existingBucket = this.buckets.get(key);
+    const { bucket, result } = computeTokenBucketResult(
+      existingBucket,
+      this.maxRequests,
+      this.windowMs,
+      now,
+    );
 
-    if (!bucket || now >= bucket.resetAt) {
-      this.buckets.set(key, {
-        count: 1,
-        resetAt: now + this.windowMs,
-      });
-      return { allowed: true };
-    }
-
-    if (bucket.count >= this.maxRequests) {
-      return {
-        allowed: false,
-        retryAfterMs: Math.max(bucket.resetAt - now, 0),
-      };
-    }
-
-    bucket.count += 1;
-    return { allowed: true };
+    this.buckets.set(key, bucket);
+    return result;
   }
 
   reset(): void {
@@ -74,7 +104,7 @@ export function createRateLimitMiddleware(
     if (!result.allowed) {
       const retryAfterMs = result.retryAfterMs ?? options.windowMs;
       const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
-      const requestId = (req as Request & { id?: string }).id ?? 'unknown';
+      const requestId = getRequestId(req);
 
       logger.warn('[rateLimit] request limit exceeded', {
         requestId,
@@ -83,12 +113,12 @@ export function createRateLimitMiddleware(
       });
 
       res.set('Retry-After', String(retryAfterSeconds));
-      res.status(429).json({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'Too Many Requests',
+      res.status(429).json(errorEnvelope(
+        'TOO_MANY_REQUESTS',
+        'Too Many Requests',
         requestId,
-        retryAfterMs,
-      });
+        { retryAfterMs },
+      ));
       return;
     }
 

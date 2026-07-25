@@ -155,6 +155,11 @@ export const config = {
     maxRequests: env.LOGIN_RATE_LIMIT_MAX_REQUESTS,
   },
 
+  featureFlagsRateLimit: {
+    windowMs: env.FEATURE_FLAGS_RATE_LIMIT_WINDOW_MS,
+    maxRequests: env.FEATURE_FLAGS_RATE_LIMIT_MAX_REQUESTS,
+  },
+
   rateLimiter: {
     maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
     windowMs: env.RATE_LIMIT_WINDOW_MS,

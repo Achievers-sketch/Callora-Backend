@@ -36,6 +36,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { performHealthCheck, type HealthCheckConfig } from './services/healthCheck.js';
 import { createDependenciesRouter } from './routes/health/dependencies.js';
 import quotaRequestsRouter from './routes/quota/requests.js';
+import { createFeatureFlagsRouter } from './routes/feature-flags.js';
 import { parsePagination, paginatedResponse } from './lib/pagination.js';
 import { InMemoryVaultRepository, type VaultRepository } from './repositories/vaultRepository.js';
 import { DepositController } from './controllers/depositController.js';
@@ -329,8 +330,9 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
     }),
   );
 
-  // Plugin marketplace — community-developed billing rule plugins
   app.use('/api/marketplace/plugins', createPluginsRouter());
+
+  app.use('/api/feature-flags', createFeatureFlagsRouter());
 
   // Mount all routes including billing and limits
   app.use('/api', createApiRouter({
