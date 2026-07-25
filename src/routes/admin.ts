@@ -17,6 +17,7 @@ import { createAdminWebhooksRouter } from './admin/webhooks.js';
 import { createAdminApisRouter } from './admin/apis.js';
 import { createAdminHealthProbesRouter } from './admin/health/probes.js';
 import { createAdminCreditGrantsRouter } from './admin/billing/credits/grant.js';
+import { createAdminQuotaBulkRouter } from './admin/quotas/bulk.js';
 import { createAdminUsageExportRouter } from './admin/usage/export.js';
 import { createAdminKeyConcurrencyRouter } from './admin/keys/concurrency.js';
 
@@ -229,6 +230,12 @@ router.use('/health/probes', createAdminHealthProbesRouter());
 // Mount: POST /api/admin/billing/credits/grant
 // ---------------------------------------------------------------------------
 router.use('/billing/credits', createAdminCreditGrantsRouter());
+
+// ---------------------------------------------------------------------------
+// Admin quota bulk updates
+// Mount: POST /api/admin/quotas/bulk-update
+// ---------------------------------------------------------------------------
+router.use('/quotas', createAdminQuotaBulkRouter());
 
 // ---------------------------------------------------------------------------
 // GrantFox FWC26 per-key concurrency stats
