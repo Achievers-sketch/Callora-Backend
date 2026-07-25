@@ -192,6 +192,9 @@ export const ErrorCode = {
   /** The delivery ID provided for webhook replay is missing or invalid */
   INVALID_DELIVERY_ID: "INVALID_DELIVERY_ID",
 
+  /** The retry policy provided is invalid */
+  INVALID_RETRY_POLICY: "INVALID_RETRY_POLICY",
+
   /** No Dead-Letter Queue entry was found for the given delivery ID */
   DLQ_ENTRY_NOT_FOUND: "DLQ_ENTRY_NOT_FOUND",
 

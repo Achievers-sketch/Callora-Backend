@@ -41,7 +41,7 @@ import { InMemoryVaultRepository, type VaultRepository } from './repositories/va
 import { DepositController } from './controllers/depositController.js';
 import { VaultController } from './controllers/vaultController.js';
 import { TransactionBuilderService } from './services/transactionBuilder.js';
-import { requestIdMiddleware } from './middleware/requestId.js';
+import { requestIdMiddleware, responseEnrichMiddleware } from './middleware/requestId.js';
 import { createMemoryAccountingMiddleware } from './middleware/memoryAccounting.js';
 import { validate } from './middleware/validate.js';
 import { createAccessLogMiddleware } from './middleware/accessLog.js';
@@ -153,6 +153,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   }));
 
   app.use(requestIdMiddleware);
+  app.use(responseEnrichMiddleware);
   const memoryAccountingMiddleware = createMemoryAccountingMiddleware(config.memoryAccounting);
   app.use(memoryAccountingMiddleware);
   app.use(metricsMiddleware);

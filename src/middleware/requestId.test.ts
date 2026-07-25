@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import type { Request, Response, NextFunction } from 'express';
 import { getRequestId } from '../logger.js';
-import { requestIdMiddleware, sanitizeRequestId, REQUEST_ID_MAX_LENGTH } from './requestId.js';
+import {
+  requestIdMiddleware,
+  responseEnrichMiddleware,
+  sanitizeRequestId,
+  REQUEST_ID_MAX_LENGTH,
+} from './requestId.js';
 
 describe('sanitizeRequestId', () => {
   test('returns the value unchanged for a normal id', () => {
@@ -174,5 +179,252 @@ describe('requestId middleware', () => {
     }) as NextFunction;
 
     requestIdMiddleware(req, res, next);
+  });
+});
+
+describe('responseEnrichMiddleware', () => {
+  test('injects requestId into a plain-object JSON response body', (done) => {
+    const req = { id: 'enrich-req-1' } as unknown as Request;
+
+    let jsonBody: unknown;
+    const res = {
+      json: function (body: unknown) {
+        jsonBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      res.json({ status: 'ok' });
+      assert.deepStrictEqual(jsonBody, { status: 'ok', requestId: 'enrich-req-1' });
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('does not overwrite an existing requestId in the body', (done) => {
+    const req = { id: 'enrich-req-2' } as unknown as Request;
+
+    let jsonBody: unknown;
+    const res = {
+      json: function (body: unknown) {
+        jsonBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      res.json({ status: 'ok', requestId: 'existing-custom-id' });
+      assert.deepStrictEqual(jsonBody, { status: 'ok', requestId: 'existing-custom-id' });
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('does not inject into array responses', (done) => {
+    const req = { id: 'enrich-req-3' } as unknown as Request;
+
+    let jsonBody: unknown;
+    const res = {
+      json: function (body: unknown) {
+        jsonBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      res.json([{ name: 'item1' }, { name: 'item2' }]);
+      assert.deepStrictEqual(jsonBody, [{ name: 'item1' }, { name: 'item2' }]);
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('does not inject into null responses', (done) => {
+    const req = { id: 'enrich-req-4' } as unknown as Request;
+
+    let jsonBody: unknown;
+    const res = {
+      json: function (body: unknown) {
+        jsonBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      res.json(null);
+      assert.equal(jsonBody, null);
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('does not inject into primitive responses', (done) => {
+    const req = { id: 'enrich-req-5' } as unknown as Request;
+
+    let jsonBody: unknown;
+    const res = {
+      json: function (body: unknown) {
+        jsonBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      res.json('just-a-string');
+      assert.equal(jsonBody, 'just-a-string');
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('preserves original res.json return value', (done) => {
+    const req = { id: 'enrich-req-6' } as unknown as Request;
+
+    const res = {
+      json: function (body: unknown) {
+        return { body, _wrapped: true } as unknown as Response;
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      const result = res.json({ status: 'ok' });
+      assert.ok((result as unknown as { _wrapped: boolean })._wrapped);
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('skips injection when req.id is absent and no async context', (done) => {
+    const req = {} as unknown as Request;
+
+    let jsonBody: unknown;
+    const res = {
+      json: function (body: unknown) {
+        jsonBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      res.json({ status: 'ok' });
+      // When no requestId is available, the body is left untouched
+      assert.deepStrictEqual(jsonBody, { status: 'ok' });
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('chains gracefully — res.json still works after multiple calls', (done) => {
+    const req = { id: 'enrich-chain' } as unknown as Request;
+
+    const bodies: unknown[] = [];
+    const res = {
+      json: function (body: unknown) {
+        bodies.push(body);
+        return this as unknown as Response;
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      res.json({ first: true });
+      res.json({ second: true });
+      assert.equal(bodies.length, 2);
+      assert.deepStrictEqual(bodies[0], { first: true, requestId: 'enrich-chain' });
+      assert.deepStrictEqual(bodies[1], { second: true, requestId: 'enrich-chain' });
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('enriches object bodies sent via res.send()', (done) => {
+    const req = { id: 'send-enrich' } as unknown as Request;
+
+    let sendBody: unknown;
+    const res = {
+      send: function (body: unknown) {
+        sendBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response & { send: (body: unknown) => Response };
+
+    const next = (() => {
+      res.send({ status: 'ok' });
+      assert.deepStrictEqual(sendBody, { status: 'ok', requestId: 'send-enrich' });
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('does not enrich string bodies sent via res.send()', (done) => {
+    const req = { id: 'send-string' } as unknown as Request;
+
+    let sendBody: unknown;
+    const res = {
+      send: function (body: unknown) {
+        sendBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response & { send: (body: unknown) => Response };
+
+    const next = (() => {
+      res.send('plain-text-response');
+      assert.equal(sendBody, 'plain-text-response');
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('does not enrich array bodies sent via res.send()', (done) => {
+    const req = { id: 'send-array' } as unknown as Request;
+
+    let sendBody: unknown;
+    const res = {
+      send: function (body: unknown) {
+        sendBody = body;
+        return this as unknown as Response;
+      },
+    } as unknown as Response & { send: (body: unknown) => Response };
+
+    const next = (() => {
+      res.send([1, 2, 3]);
+      assert.deepStrictEqual(sendBody, [1, 2, 3]);
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
+  });
+
+  test('skips patching when no requestId is available', (done) => {
+    const req = {} as unknown as Request;
+
+    // If neither req.id nor ALS context provides a requestId,
+    // the original res.json should be left untouched.
+    let called = false;
+    const originalJson = function (body: unknown) {
+      called = true;
+      return this as unknown as Response;
+    };
+    const res = { json: originalJson } as unknown as Response;
+
+    const next = (() => {
+      // res.json should still be the original (unpatched) reference
+      assert.equal(res.json, originalJson);
+      res.json({ status: 'ok' });
+      assert.ok(called);
+      done();
+    }) as NextFunction;
+
+    responseEnrichMiddleware(req, res, next);
   });
 });

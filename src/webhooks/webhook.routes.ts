@@ -28,6 +28,7 @@ const VALID_EVENTS: WebhookEventType[] = [
   'new_api_call',
   'settlement_completed',
   'low_balance_alert',
+  'usage_event.created',
 ];
 
 function generateWebhookSecret(): string {

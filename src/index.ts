@@ -10,7 +10,7 @@ import { legacyV1DeprecationMiddleware } from "./middleware/deprecation.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { createGatewayIpAllowlist } from "./middleware/ipAllowlist.js";
 import { createAccessLogMiddleware } from "./middleware/accessLog.js";
-import { requestIdMiddleware } from "./middleware/requestId.js";
+import { requestIdMiddleware, responseEnrichMiddleware } from "./middleware/requestId.js";
 import { metricsEndpoint } from "./metrics.js";
 import {
   awaitWebhookDispatcherIdle,
@@ -43,6 +43,11 @@ import { ApiKey } from "./types/gateway.js";
 import { listingsCache } from "./lib/listingsCache.js";
 import { createSlowQueryAlerterJob } from "./workers/slowQueryAlerter.js";
 import { createAnomalyDetectorJob } from "./workers/anomalyDetector.js";
+import {
+  initSloRecorder,
+  sloRecorderMiddleware,
+} from "./workers/sloAlertRecorder.js";
+import { createSloAlertJob } from "./workers/sloAlertJob.js";
 import { createMonthlyInvoiceJob } from "./workers/monthlyInvoiceJob.js";
 import { createSettlementReconWorker } from "./workers/settlementRecon.js";
 
@@ -62,12 +67,23 @@ export {
 export const app = express();
 
 app.use(requestIdMiddleware);
+app.use(responseEnrichMiddleware);
 app.use(
   createAccessLogMiddleware({
     sampleRate: config.accessLog.sampleRate,
     redactFields: config.accessLog.redactFields,
   }),
 );
+
+// SLO recorder: must be initialised before any request can match a
+// configured route so that the first request samples land in the right
+// window. The recorder is cheap for unconfigured routes (a Map miss) so
+// it is mounted unconditionally; only the worker is gated on the webhook URL.
+initSloRecorder({
+  configs: config.sloAlert.configs,
+  observationWindowMs: config.sloAlert.observationWindowMs,
+});
+app.use(sloRecorderMiddleware);
 
 // Standard JSON middleware for non-webhook routes
 app.use((req, res, next) => {
@@ -180,6 +196,15 @@ if (isDirectExecution) {
     intervalMs: config.monthlyInvoiceJob.intervalMs,
   });
 
+  const sloAlertJob = config.sloAlert.enabled
+    ? createSloAlertJob({
+        webhookUrl: config.sloAlert.webhookUrl!,
+        pollIntervalMs: config.sloAlert.pollIntervalMs,
+        dedupWindowMs: config.sloAlert.dedupWindowMs,
+        observationWindowMs: config.sloAlert.observationWindowMs,
+      })
+    : null;
+
   const apiKeys = new Map<string, ApiKey>([
     [
       "test-key-1",
@@ -266,6 +291,14 @@ if (isDirectExecution) {
     });
   }
 
+  if (sloAlertJob) {
+    shutdownSubsystems.push({
+      name: "slo-alert-job",
+      beginShutdown: () => sloAlertJob!.beginShutdown(),
+      awaitIdle: () => sloAlertJob!.awaitIdle(),
+    });
+  }
+
   shutdownSubsystems.push({
     name: "monthly-invoice-job",
     beginShutdown: () => monthlyInvoiceJob.beginShutdown(),
@@ -293,6 +326,7 @@ if (isDirectExecution) {
     slowQueryAlerterJob?.stop();
     anomalyDetectorJob?.stop();
     monthlyInvoiceJob.stop();
+    sloAlertJob?.stop();
     await closeDb();
     await Promise.allSettled([
       closePgPool(),
@@ -330,6 +364,7 @@ if (isDirectExecution) {
       slowQueryAlerterJob?.start();
       anomalyDetectorJob?.start();
       monthlyInvoiceJob.start();
+      sloAlertJob?.start();
 
       const server = app.listen(PORT, () => {
         console.log(`Callora backend listening on http://localhost:${PORT}`);

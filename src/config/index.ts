@@ -246,4 +246,18 @@ export const config = {
   monthlyInvoiceJob: {
     intervalMs: env.MONTHLY_INVOICE_JOB_INTERVAL_MS,
   },
+
+  sloAlert: {
+    enabled: Boolean(env.SLO_ALERT_WEBHOOK_URL) && env.SLO_ROUTE_CONFIGS.length > 0,
+    webhookUrl: env.SLO_ALERT_WEBHOOK_URL,
+    pollIntervalMs: env.SLO_ALERT_POLL_INTERVAL_MS,
+    dedupWindowMs: env.SLO_ALERT_DEDUP_WINDOW_MS,
+    observationWindowMs: env.SLO_ALERT_OBSERVATION_WINDOW_MS,
+    configs: env.SLO_ROUTE_CONFIGS as Array<{
+      method: string;
+      route: string;
+      maxErrorRate?: number;
+      maxLatencyP95Ms?: number;
+    }>,
+  },
 } as const;

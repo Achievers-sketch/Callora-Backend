@@ -13,6 +13,7 @@
  *   - Cross-user ownership guard (GET /:id returns 404 for other user request)
  *   - Status filter for list endpoint
  *   - Store isolation via setQuotaRequestStore in beforeEach
+ *   - Tracing spans created for each endpoint
  */
 
 import request from 'supertest';
@@ -25,6 +26,9 @@ import {
   getQuotaRequestStore,
   InMemoryQuotaRequestStore,
 } from '../../services/quotaService.js';
+import { __setTracer } from '../../otel/spans.js';
+import { SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
+import type { Span, Tracer, SpanOptions as OtelSpanOptions } from '@opentelemetry/api';
 
 // ---------------------------------------------------------------------------
 // Test app factory
@@ -48,6 +52,92 @@ const validBody = {
   requested_tier: 'pro',
   reason: 'Need higher rate limits for production workload',
 };
+
+// ---------------------------------------------------------------------------
+// In-memory mock tracer for span assertions
+// ---------------------------------------------------------------------------
+
+interface RecordedSpan {
+  name: string;
+  kind: number;
+  attributes: Record<string, string>;
+  status: { code: number; message?: string };
+  exceptions: Error[];
+  ended: boolean;
+}
+
+function createInMemoryTracer(): { tracer: Tracer; getSpans: () => RecordedSpan[] } {
+  const spans: RecordedSpan[] = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tracer: any = {
+    startSpan(name: string, options?: OtelSpanOptions): Span {
+      const recorded: RecordedSpan = {
+        name,
+        kind: options?.kind ?? SpanKind.INTERNAL,
+        attributes: {},
+        status: { code: SpanStatusCode.UNSET },
+        exceptions: [],
+        ended: false,
+      };
+      spans.push(recorded);
+
+      // Separate the recordException methods: one as a regular function
+      // (called by withSpan) and omit from the object to avoid the recursive
+      // type / name-collision problems.
+      const recordErr = (exception: Error) => {
+        recorded.exceptions.push(exception);
+      };
+
+      const mockSpan = {
+        setAttribute(key: string, value: string) {
+          recorded.attributes[key] = value;
+          return this;
+        },
+        setAttributes(_attributes: Record<string, string>) {
+          Object.assign(recorded.attributes, _attributes);
+          return this;
+        },
+        setStatus(status: { code: number; message?: string }) {
+          recorded.status = status;
+          return this;
+        },
+        recordException: recordErr,
+        end() {
+          recorded.ended = true;
+        },
+        spanContext() {
+          return {
+            traceId: 'trace-id',
+            spanId: 'span-id',
+            traceFlags: 1,
+          };
+        },
+        isRecording() {
+          return true;
+        },
+        addEvent() {
+          return this;
+        },
+        addLink() {
+          return this;
+        },
+        updateName() {
+          return this;
+        },
+      };
+
+      return mockSpan as unknown as Span;
+    },
+    startActiveSpan(name: string, optionsOrFn: unknown, maybeFn?: unknown) {
+      const fn = typeof optionsOrFn === 'function' ? optionsOrFn : maybeFn;
+      const span = tracer.startSpan(name);
+      return (fn as (span: Span) => unknown)(span);
+    },
+  };
+
+  return { tracer, getSpans: () => spans };
+}
 
 // ---------------------------------------------------------------------------
 // POST /api/quota/requests
@@ -551,5 +641,166 @@ describe('GET /api/quota/requests/:id', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('rejected');
     expect(res.body.data.adminNotes).toBe('Insufficient justification provided');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tracing span tests
+// ---------------------------------------------------------------------------
+
+describe('Tracing spans for /api/quota/requests', () => {
+  let getSpans: () => RecordedSpan[];
+
+  beforeEach(() => {
+    setQuotaRequestStore(new InMemoryQuotaRequestStore());
+    const { tracer, getSpans: getSpansFn } = createInMemoryTracer();
+    getSpans = getSpansFn;
+    __setTracer(tracer);
+  });
+
+  afterAll(() => {
+    // Restore the default tracer so subsequent test suites aren't affected.
+    __setTracer(trace.getTracer('callora-quota-service'));
+  });
+
+  it('creates a span named POST /api/quota/requests on create', async () => {
+    const app = createTestApp();
+
+    await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-request-id', 'trace-test-1')
+      .send(validBody);
+
+    const spans = getSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].name).toBe('POST /api/quota/requests');
+    expect(spans[0].kind).toBe(SpanKind.INTERNAL);
+    expect(spans[0].status.code).toBe(SpanStatusCode.OK);
+    expect(spans[0].ended).toBe(true);
+  });
+
+  it('sets requestId attribute on the span from x-request-id header', async () => {
+    const app = createTestApp();
+
+    await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-request-id', 'span-req-id-42')
+      .send(validBody);
+
+    const spans = getSpans();
+    expect(spans[0].attributes.requestId).toBe('span-req-id-42');
+  });
+
+  it('creates a span named GET /api/quota/requests on list', async () => {
+    const app = createTestApp();
+
+    await request(app)
+      .get('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-request-id', 'trace-test-2');
+
+    const spans = getSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].name).toBe('GET /api/quota/requests');
+    expect(spans[0].kind).toBe(SpanKind.INTERNAL);
+    expect(spans[0].attributes.requestId).toBe('trace-test-2');
+  });
+
+  it('creates a span named GET /api/quota/requests/:id on fetch by ID', async () => {
+    const app = createTestApp();
+
+    const created = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .send(validBody);
+
+    const id = created.body.data.id;
+
+    // Reset spans to only capture the GET span
+    const { tracer, getSpans: getSpansFn } = createInMemoryTracer();
+    getSpans = getSpansFn;
+    __setTracer(tracer);
+
+    await request(app)
+      .get(`/api/quota/requests/${id}`)
+      .set('x-user-id', 'dev-1')
+      .set('x-request-id', 'trace-test-3');
+
+    const spans = getSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].name).toBe('GET /api/quota/requests/:id');
+    expect(spans[0].attributes.requestId).toBe('trace-test-3');
+  });
+
+  it('records exception and marks span as ERROR when the handler throws', async () => {
+    const app = createTestApp();
+
+    // Trigger a 404 by fetching a nonexistent ID — the handler catches the
+    // NotFoundError inside the withSpan callback so the span sees it.
+    await request(app)
+      .get('/api/quota/requests/nonexistent-id')
+      .set('x-user-id', 'dev-1')
+      .set('x-request-id', 'trace-error-1');
+
+    const spans = getSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].status.code).toBe(SpanStatusCode.ERROR);
+    expect(spans[0].exceptions).toHaveLength(1);
+    expect(spans[0].exceptions[0].message).toContain('Quota request not found');
+  });
+
+  it('records exception and marks span as ERROR on ownership guard (cross-user access)', async () => {
+    const app = createTestApp();
+
+    // dev-2 creates a request
+    const created = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-2')
+      .send(validBody);
+
+    const id = created.body.data.id;
+
+    // Reset spans to only capture the GET span
+    const { tracer, getSpans: getSpansFn } = createInMemoryTracer();
+    getSpans = getSpansFn;
+    __setTracer(tracer);
+
+    // dev-1 tries to fetch dev-2's request — ownership guard throws NotFoundError
+    await request(app)
+      .get(`/api/quota/requests/${id}`)
+      .set('x-user-id', 'dev-1')
+      .set('x-request-id', 'trace-ownership-guard');
+
+    const spans = getSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].status.code).toBe(SpanStatusCode.ERROR);
+    expect(spans[0].exceptions).toHaveLength(1);
+    expect(spans[0].exceptions[0].message).toContain('Quota request not found');
+  });
+
+  it('ends every span in the finally block even on success', async () => {
+    const app = createTestApp();
+
+    await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .send(validBody);
+
+    const spans = getSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].ended).toBe(true);
+  });
+
+  it('ends every span in the finally block even on error', async () => {
+    const app = createTestApp();
+
+    await request(app)
+      .get('/api/quota/requests/nonexistent-id')
+      .set('x-user-id', 'dev-1');
+
+    const spans = getSpans();
+    expect(spans[0].ended).toBe(true);
   });
 });

@@ -106,7 +106,7 @@
     "/api/gateway/health/{apiSlug}": {
       "get": {
         "summary": "Get gateway health for an API",
-        "description": "Returns aggregated upstream latency percentiles and circuit breaker state for a given API slug. Public endpoint \u2014 no authentication required. Only aggregated metrics are returned; no tenant identifiers or raw histogram data are exposed. Results are cached in-memory for 5 seconds.",
+        "description": "Returns aggregated upstream latency percentiles and circuit breaker state for a given API slug. Public endpoint — no authentication required. Only aggregated metrics are returned; no tenant identifiers or raw histogram data are exposed. Results are cached in-memory for 5 seconds.",
         "parameters": [
           {
             "name": "apiSlug",
@@ -669,7 +669,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized \u2014 missing or invalid bearer token.",
+            "description": "Unauthorized — missing or invalid bearer token.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1418,7 +1418,7 @@
         },
         "responses": {
           "201": {
-            "description": "Endpoints registered successfully \u2014 per-row details returned",
+            "description": "Endpoints registered successfully — per-row details returned",
             "content": {
               "application/json": {
                 "schema": {
@@ -1428,7 +1428,7 @@
             }
           },
           "400": {
-            "description": "Validation error \u2014 invalid endpoint data, empty array, or too many endpoints",
+            "description": "Validation error — invalid endpoint data, empty array, or too many endpoints",
             "content": {
               "application/json": {
                 "schema": {
@@ -2056,6 +2056,173 @@
           }
         }
       }
+    },
+    "/api/billing/fee-abstraction/quote": {
+      "post": {
+        "summary": "Get fee-abstraction quote",
+        "description": "Returns the estimated XLM fee and equivalent app-token amount required to wrap the supplied inner Stellar transaction in a fee-bump envelope.",
+        "tags": ["Billing", "Fee Abstraction"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["innerXdr"],
+                "properties": {
+                  "innerXdr": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Base64-encoded signed inner Stellar transaction XDR"
+                  }
+                }
+              },
+              "example": {
+                "innerXdr": "AAAAAQAAAAC..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fee quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeAbstractionQuote"
+                },
+                "example": {
+                  "baseFeeStroops": 100,
+                  "feeBumpFeeStroops": 600,
+                  "feeBumpFeeXlm": "0.0000600",
+                  "appTokenAmount": "0.0000060",
+                  "network": "testnet"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error — innerXdr missing, empty, or not a valid Stellar transaction XDR",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": {
+                  "code": "VALIDATION_ERROR",
+                  "message": "innerXdr is not a valid Stellar transaction XDR",
+                  "requestId": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "Unauthorized",
+                  "requestId": "uuid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/fee-abstraction": {
+      "post": {
+        "summary": "Execute fee abstraction",
+        "description": "Wraps the supplied inner Stellar transaction in a fee-bump envelope signed by the platform fee account. The caller provides a reference to their app-token payment. Returns the signed fee-bump XDR ready for submission to Horizon.",
+        "tags": ["Billing", "Fee Abstraction"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["innerXdr", "appTokenPaymentTxId"],
+                "properties": {
+                  "innerXdr": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Base64-encoded signed inner Stellar transaction XDR"
+                  },
+                  "appTokenPaymentTxId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Payment reference confirming the app-token deduction for the fee"
+                  }
+                }
+              },
+              "example": {
+                "innerXdr": "AAAAAQAAAAC...",
+                "appTokenPaymentTxId": "tx_abc123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed fee-bump transaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeAbstractionResult"
+                },
+                "example": {
+                  "feeBumpXdr": "AAAAAA==",
+                  "feeAccountPublicKey": "GABC...XYZ",
+                  "feeStroops": 600
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error — missing/empty fields or invalid innerXdr",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": {
+                  "code": "VALIDATION_ERROR",
+                  "message": "innerXdr is not a valid Stellar transaction XDR",
+                  "requestId": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "Unauthorized",
+                  "requestId": "uuid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fee-bumper not configured or signing failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": {
+                  "code": "INTERNAL_SERVER_ERROR",
+                  "message": "Fee-bumper service is not configured",
+                  "requestId": "uuid"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2227,7 +2394,7 @@
             "type": "string",
             "minLength": 10,
             "maxLength": 1000,
-            "description": "Justification for the upgrade (10\u20131000 characters)"
+            "description": "Justification for the upgrade (10–1000 characters)"
           },
           "requested_overrides": {
             "type": "object",
@@ -3387,6 +3554,7 @@
           "MALFORMED_WEBHOOK_SIGNATURE",
           "INVALID_WEBHOOK_SIGNATURE",
           "INVALID_DELIVERY_ID",
+          "INVALID_RETRY_POLICY",
           "DLQ_ENTRY_NOT_FOUND",
           "INVALID_IP_FORMAT",
           "IP_NOT_ALLOWED",
@@ -3525,6 +3693,51 @@
           "notes": {
             "type": "string",
             "maxLength": 1000
+          }
+        }
+      },
+      "FeeAbstractionQuote": {
+        "type": "object",
+        "required": ["baseFeeStroops", "feeBumpFeeStroops", "feeBumpFeeXlm", "appTokenAmount", "network"],
+        "properties": {
+          "baseFeeStroops": {
+            "type": "integer",
+            "description": "Per-operation base fee in stroops"
+          },
+          "feeBumpFeeStroops": {
+            "type": "integer",
+            "description": "Total outer fee for the fee-bump envelope in stroops"
+          },
+          "feeBumpFeeXlm": {
+            "type": "string",
+            "description": "feeBumpFeeStroops expressed as XLM (7 decimal places)"
+          },
+          "appTokenAmount": {
+            "type": "string",
+            "description": "Equivalent app-token (USDC) amount to charge (indicative)"
+          },
+          "network": {
+            "type": "string",
+            "enum": ["testnet", "mainnet"],
+            "description": "Active Stellar network"
+          }
+        }
+      },
+      "FeeAbstractionResult": {
+        "type": "object",
+        "required": ["feeBumpXdr", "feeAccountPublicKey", "feeStroops"],
+        "properties": {
+          "feeBumpXdr": {
+            "type": "string",
+            "description": "Signed fee-bump transaction XDR; submit directly to Horizon"
+          },
+          "feeAccountPublicKey": {
+            "type": "string",
+            "description": "Stellar public key of the platform fee account"
+          },
+          "feeStroops": {
+            "type": "integer",
+            "description": "Total fee charged by the fee-bump envelope in stroops"
           }
         }
       }
