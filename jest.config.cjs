@@ -28,6 +28,7 @@ module.exports = {
       },
     ],
   },
+  setupFiles: ["<rootDir>/jest.env-setup.cjs"],
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },

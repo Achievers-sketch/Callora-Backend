@@ -49,6 +49,7 @@ import { InMemoryRestRateLimiter, createRestRateLimitMiddleware } from './middle
 import type { RestRateLimitOptions } from './middleware/restRateLimit.js';
 import { createPerDevConcurrencyMiddleware } from './middleware/perDevConcurrency.js';
 import { auditEnrichMiddleware } from './middleware/auditEnrich.js';
+import { createRouteBodyLimitMiddleware } from './middleware/routeBodyLimit.js';
 import { metricsMiddleware, metricsEndpoint } from './metrics.js';
 import { config } from './config/index.js';
 import {
@@ -220,6 +221,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
     }),
   );
   const requestBodyLimit = process.env.REQUEST_BODY_LIMIT ?? '100kb';
+  app.use(createRouteBodyLimitMiddleware(config.routeBodyLimits));
   app.use(express.json({ limit: requestBodyLimit }));
   app.use(express.urlencoded({ extended: false, limit: requestBodyLimit }));
   // Attach req.auditContext (IP, UA, tenantId, correlationId, bodyHash) for all routes.
