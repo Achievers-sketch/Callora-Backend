@@ -99,6 +99,11 @@ export interface ApiRepository {
   ): Promise<Api[]>;
   listPublic(filters?: ApiListFilters): Promise<Api[]>;
   findById(id: number): Promise<ApiDetails | null>;
+  /**
+   * Returns the raw API row without filtering by status or deleted_at.
+   * Used by subscription routes that need to inspect soft-deleted records.
+   */
+  findRawById(id: number): Promise<Api | null>;
   getEndpoints(apiId: number): Promise<ApiEndpointInfo[]>;
   bulkCreateEndpoints(
     apiId: number,
@@ -334,6 +339,16 @@ export const defaultApiRepository: ApiRepository = {
         description: row.developer_description ?? null,
       },
     };
+  },
+
+  async findRawById(id) {
+    const rows = await db
+      .select()
+      .from(schema.apis)
+      .where(eq(schema.apis.id, id))
+      .limit(1);
+
+    return rows[0] ?? null;
   },
 
   async getEndpoints(apiId) {
@@ -664,6 +679,10 @@ export class InMemoryApiRepository implements ApiRepository {
     const api = this.apis.find((a) => a.id === id && !a.deleted_at);
     if (!api) return null;
     return this.detailsById.get(id) ?? null;
+  }
+
+  async findRawById(id: number): Promise<Api | null> {
+    return this.apis.find((a) => a.id === id) ?? null;
   }
 
   async getEndpoints(apiId: number): Promise<ApiEndpointInfo[]> {

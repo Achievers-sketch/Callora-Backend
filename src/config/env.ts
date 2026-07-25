@@ -187,6 +187,45 @@ export const envSchema = z
     // Body size limits
     REQUEST_BODY_LIMIT: z.string().default('100kb'),
     GATEWAY_BODY_LIMIT: z.string().default('1mb'),
+    ROUTE_BODY_LIMITS: z
+      .string()
+      .optional()
+      .transform((value, ctx) => {
+        if (!value || value.trim().length === 0) {
+          return [];
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(value);
+        } catch (error) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `ROUTE_BODY_LIMITS must be valid JSON: ${(error as Error).message}`,
+          });
+          return z.NEVER;
+        }
+
+        if (!Array.isArray(parsed)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'ROUTE_BODY_LIMITS must be a JSON array of route body-limit objects',
+          });
+          return z.NEVER;
+        }
+
+        return parsed.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object');
+      })
+      .pipe(
+        z.array(
+          z.object({
+            method: z.string().min(1),
+            route: z.string().min(1),
+            limit: z.string().min(1),
+          }),
+        ),
+      )
+      .default([]),
 
     // Security
     BCRYPT_COST_FACTOR: z.coerce.number().int().min(10).max(31).default(12),
@@ -218,6 +257,77 @@ export const envSchema = z
 
     // Monthly invoice job
     MONTHLY_INVOICE_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(86400000),
+
+    // ────────────────────────────────────────────────────────────────────────
+    // SLO burn-rate alerting (issue #706)
+    //
+    // Each entry in `SLO_ROUTE_CONFIGS` defines a per-route burn threshold
+    // evaluated against a rolling 96-hour window by the SLO alerter worker.
+    // At least one of `maxErrorRate` or `maxLatencyP95Ms` must be set, and
+    // `method`/`route` must match the parameterised Express route label
+    // emitted by `http_request_duration_seconds` (e.g. `/api/billing/deduct`
+    // or `/v1/call/:apiId`).
+    //
+    // Implementation note: the env variable is a JSON string but the schema
+    // resolves to a typed `SloRouteConfig[]`. The `transform` clause parses
+    // and validates the JSON before the `pipe(z.array(...))` step enforces
+    // per-entry shape (and the `refine` rejects entries missing either
+    // threshold). Map to `[]` when the env var is unset or empty — there is
+    // no need to also call `.default()` here because the transform already
+    // covers the `undefined` case.
+    // ────────────────────────────────────────────────────────────────────────
+    SLO_ROUTE_CONFIGS: z
+      .string()
+      .optional()
+      .transform((val, ctx) => {
+        if (!val || val.trim().length === 0) {
+          return [];
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(val);
+        } catch (err) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `SLO_ROUTE_CONFIGS must be valid JSON: ${(err as Error).message}`,
+          });
+          return z.NEVER;
+        }
+        if (!Array.isArray(parsed)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'SLO_ROUTE_CONFIGS must be a JSON array of route objects',
+          });
+          return z.NEVER;
+        }
+        return parsed as Array<unknown>;
+      })
+      .pipe(
+        z.array(
+          z
+            .object({
+              method: z.string().min(1, 'method is required'),
+              route: z
+                .string()
+                .min(1, 'route is required')
+                .startsWith('/', 'route must start with "/"'),
+              maxErrorRate: z.number().min(0).max(1).optional(),
+              maxLatencyP95Ms: z.number().positive().optional(),
+            })
+            .refine(
+              (cfg) =>
+                cfg.maxErrorRate !== undefined ||
+                cfg.maxLatencyP95Ms !== undefined,
+              'each SLO route config must define at least one of maxErrorRate or maxLatencyP95Ms',
+            ),
+        ),
+      ),
+    SLO_ALERT_WEBHOOK_URL: z.string().url().optional(),
+    SLO_ALERT_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(300_000),
+    SLO_ALERT_DEDUP_WINDOW_MS: z.coerce.number().int().positive().default(86_400_000), // 24h
+    SLO_ALERT_OBSERVATION_WINDOW_MS: z
+      .coerce.number().int().positive()
+      .default(345_600_000), // 96h = 4 days, the slow-burn window
   })
   .superRefine((values, ctx) => {
     if (values.SOROBAN_RPC_ENABLED && !values.SOROBAN_RPC_URL) {

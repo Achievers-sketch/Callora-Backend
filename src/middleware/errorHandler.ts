@@ -14,6 +14,11 @@ export interface ErrorResponseBody {
   details?: ValidationErrorDetail[];
 }
 
+import { errorEnvelope } from '../lib/envelope.js';
+import type { ErrorEnvelope } from '../types/ResponseEnvelope.js';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
 function extractValidationDetails(err: unknown): ValidationErrorDetail[] | undefined {
   if (err instanceof ValidationError) {
     return err.details;
@@ -67,6 +72,14 @@ function deriveErrorCode(statusCode: number): string {
   }
 }
 
+/**
+ * Global error-handling middleware (4-arg form).
+ * - Catches errors thrown in routes/services
+ * - Maps known AppError subclasses to HTTP status codes
+ * - Returns consistent JSON envelope: { success: false, error: { code, message }, requestId, timestamp }
+ * - Never sends stack traces to the client in production
+ * - Logs full error server-side
+ */
 export function errorHandler(
   err: unknown,
   req: Request,
@@ -96,6 +109,14 @@ export function errorHandler(
 
   const details = extractValidationDetails(err);
   const body = buildErrorEnvelope(code, finalMessage, requestId, details);
+  // Build error envelope with optional validation details
+  const details = extractValidationDetails(err);
+  const body: ErrorEnvelope = errorEnvelope(
+    code,
+    finalMessage,
+    requestId,
+    details,
+  );
 
   if (!res.headersSent) {
     res.status(statusCode).json(body);

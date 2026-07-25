@@ -24,6 +24,7 @@ import {
 } from '../../services/quotaService.js';
 import { logger } from '../../logger.js';
 import { NotFoundError, UnauthorizedError } from '../../errors/index.js';
+import { withSpan } from '../../otel/spans.js';
 
 const router = Router();
 
@@ -42,31 +43,32 @@ router.post(
   bodyValidator(quotaRequestSchema),
   async (req: Request, res: Response<unknown, AuthenticatedLocals>, next: NextFunction) => {
     try {
-      const user = res.locals.authenticatedUser;
-      if (!user) {
-        next(new UnauthorizedError());
-        return;
-      }
+      await withSpan({ name: 'POST /api/quota/requests', req }, async () => {
+        const user = res.locals.authenticatedUser;
+        if (!user) {
+          throw new UnauthorizedError();
+        }
 
-      const request = await createQuotaRequest({
-        developerId: user.id,
-        requestedTier: req.body.requested_tier,
-        reason: req.body.reason,
-        requestedOverrides: req.body.requested_overrides
-          ? {
-              monthlyCallLimit: req.body.requested_overrides.monthly_call_limit,
-              rateLimitMaxRequests: req.body.requested_overrides.rate_limit_max_requests,
-            }
-          : undefined,
+        const request = await createQuotaRequest({
+          developerId: user.id,
+          requestedTier: req.body.requested_tier,
+          reason: req.body.reason,
+          requestedOverrides: req.body.requested_overrides
+            ? {
+                monthlyCallLimit: req.body.requested_overrides.monthly_call_limit,
+                rateLimitMaxRequests: req.body.requested_overrides.rate_limit_max_requests,
+              }
+            : undefined,
+        });
+
+        logger.info('Quota request created via self-service', {
+          quotaRequestId: request.id,
+          developerId: user.id,
+          requestedTier: request.requestedTier,
+        });
+
+        res.status(201).json({ data: request });
       });
-
-      logger.info('Quota request created via self-service', {
-        quotaRequestId: request.id,
-        developerId: user.id,
-        requestedTier: request.requestedTier,
-      });
-
-      res.status(201).json({ data: request });
     } catch (err) {
       next(err);
     }
@@ -86,45 +88,46 @@ router.get(
   requireAuth,
   async (req: Request, res: Response<unknown, AuthenticatedLocals>, next: NextFunction) => {
     try {
-      const user = res.locals.authenticatedUser;
-      if (!user) {
-        next(new UnauthorizedError());
-        return;
-      }
+      await withSpan({ name: 'GET /api/quota/requests', req }, async () => {
+        const user = res.locals.authenticatedUser;
+        if (!user) {
+          throw new UnauthorizedError();
+        }
 
-      // Optional status filter — validate the enum value at the boundary
-      const statusParam =
-        typeof req.query.status === 'string' ? req.query.status : undefined;
-      if (
-        statusParam !== undefined &&
-        !['pending', 'approved', 'rejected'].includes(statusParam)
-      ) {
-        res.status(400).json({
-          code: 'VALIDATION_ERROR',
-          message: 'status must be one of: pending, approved, rejected',
-          requestId: req.id ?? 'unknown',
+        // Optional status filter — validate the enum value at the boundary
+        const statusParam =
+          typeof req.query.status === 'string' ? req.query.status : undefined;
+        if (
+          statusParam !== undefined &&
+          !['pending', 'approved', 'rejected'].includes(statusParam)
+        ) {
+          res.status(400).json({
+            code: 'VALIDATION_ERROR',
+            message: 'status must be one of: pending, approved, rejected',
+            requestId: req.id ?? 'unknown',
+          });
+          return;
+        }
+
+        // Fetch all requests for the caller's developer ID, then filter by
+        // status in the service layer so the existing store interface is reused.
+        const allRequests = await listQuotaRequests(
+          statusParam
+            ? { status: statusParam as 'pending' | 'approved' | 'rejected' }
+            : undefined,
+        );
+
+        // Ownership guard: only return requests belonging to the caller
+        const ownRequests = allRequests.filter((r) => r.developerId === user.id);
+
+        logger.info('Quota requests listed', {
+          developerId: user.id,
+          count: ownRequests.length,
+          statusFilter: statusParam,
         });
-        return;
-      }
 
-      // Fetch all requests for the caller's developer ID, then filter by
-      // status in the service layer so the existing store interface is reused.
-      const allRequests = await listQuotaRequests(
-        statusParam
-          ? { status: statusParam as 'pending' | 'approved' | 'rejected' }
-          : undefined,
-      );
-
-      // Ownership guard: only return requests belonging to the caller
-      const ownRequests = allRequests.filter((r) => r.developerId === user.id);
-
-      logger.info('Quota requests listed', {
-        developerId: user.id,
-        count: ownRequests.length,
-        statusFilter: statusParam,
+        res.json({ data: ownRequests });
       });
-
-      res.json({ data: ownRequests });
     } catch (err) {
       next(err);
     }
@@ -146,27 +149,27 @@ router.get(
   requireAuth,
   async (req: Request, res: Response<unknown, AuthenticatedLocals>, next: NextFunction) => {
     try {
-      const user = res.locals.authenticatedUser;
-      if (!user) {
-        next(new UnauthorizedError());
-        return;
-      }
+      await withSpan({ name: 'GET /api/quota/requests/:id', req }, async () => {
+        const user = res.locals.authenticatedUser;
+        if (!user) {
+          throw new UnauthorizedError();
+        }
 
-      const request = await getQuotaRequest(req.params.id);
+        const request = await getQuotaRequest(req.params.id);
 
-      // Ownership guard: treat another developer's request as 404 to avoid
-      // leaking whether a given ID exists at all.
-      if (request.developerId !== user.id) {
-        next(new NotFoundError('Quota request not found', 'QUOTA_REQUEST_NOT_FOUND'));
-        return;
-      }
+        // Ownership guard: treat another developer's request as 404 to avoid
+        // leaking whether a given ID exists at all.
+        if (request.developerId !== user.id) {
+          throw new NotFoundError('Quota request not found', 'QUOTA_REQUEST_NOT_FOUND');
+        }
 
-      logger.info('Quota request fetched', {
-        quotaRequestId: request.id,
-        developerId: user.id,
+        logger.info('Quota request fetched', {
+          quotaRequestId: request.id,
+          developerId: user.id,
+        });
+
+        res.json({ data: request });
       });
-
-      res.json({ data: request });
     } catch (err) {
       next(err);
     }

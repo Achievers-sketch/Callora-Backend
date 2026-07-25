@@ -9,12 +9,51 @@ import { generateInvoicePdf, type InvoicePdfData, type InvoicePdfLineItem } from
 import { logger } from '../../logger.js';
 import defaultPrisma from '../../lib/prisma.js';
 
+export interface PrismaInvoiceLineItem {
+  id: string;
+  invoice_id: string;
+  description: string;
+  amount_usdc: bigint;
+  quantity: number;
+  unit_price_usdc: bigint;
+  item_type: string;
+  created_at: Date;
+}
+
+export interface PrismaInvoice {
+  id: string;
+  user_id: string;
+  invoice_number: string;
+  status: string;
+  total_amount_usdc: bigint;
+  currency: string;
+  description: string;
+  period_start: Date | null;
+  period_end: Date | null;
+  created_at: Date;
+  updated_at: Date;
+  pdf_generated_at: Date | null;
+  line_items?: PrismaInvoiceLineItem[];
+}
+
+export interface PrismaQueryArgs {
+  where?: Record<string, unknown>;
+  include?: Record<string, unknown>;
+  orderBy?: Record<string, unknown>[];
+  take?: number;
+}
+
+export interface PrismaUpdateArgs {
+  where: { id: string };
+  data: Record<string, unknown>;
+}
+
 export type PrismaClient = {
   invoice: {
-    findMany: (args: any) => Promise<any[]>;
-    findFirst: (args: any) => Promise<any>;
-    findUnique: (args: any) => Promise<any>;
-    update: (args: any) => Promise<any>;
+    findMany: (args: PrismaQueryArgs) => Promise<PrismaInvoice[]>;
+    findFirst: (args: PrismaQueryArgs) => Promise<PrismaInvoice | null>;
+    findUnique: (args: PrismaQueryArgs) => Promise<PrismaInvoice | null>;
+    update: (args: PrismaUpdateArgs) => Promise<PrismaInvoice>;
   };
 };
 
@@ -37,7 +76,7 @@ const invoiceParamsSchema = z.object({
   id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Invalid UUID'),
 });
 
-function invoiceToResponse(invoice: any) {
+function invoiceToResponse(invoice: PrismaInvoice) {
   return {
     id: invoice.id,
     invoiceNumber: invoice.invoice_number,
@@ -53,7 +92,7 @@ function invoiceToResponse(invoice: any) {
   };
 }
 
-export function createBillingPortalRouter(prisma: PrismaClient = defaultPrisma as any): Router {
+export function createBillingPortalRouter(prisma: PrismaClient = defaultPrisma as unknown as PrismaClient): Router {
   const router = Router();
 
   async function getPrismaInvoice(id: string, userId: string) {
@@ -94,7 +133,7 @@ export function createBillingPortalRouter(prisma: PrismaClient = defaultPrisma a
         const limit = query.limit ?? DEFAULT_LIMIT;
         const status = query.status;
 
-        const where: any = { user_id: user.id };
+        const where: Record<string, unknown> = { user_id: user.id };
         if (status) {
           where.status = status;
         }
@@ -168,7 +207,7 @@ export function createBillingPortalRouter(prisma: PrismaClient = defaultPrisma a
           throw new NotFoundError('Invoice not found');
         }
 
-        const lineItems = (invoice.line_items ?? []).map((item: any) => ({
+        const lineItems = (invoice.line_items ?? []).map((item: PrismaInvoiceLineItem) => ({
           id: item.id,
           invoiceId: item.invoice_id,
           description: item.description,
@@ -222,7 +261,7 @@ export function createBillingPortalRouter(prisma: PrismaClient = defaultPrisma a
         }
 
         const lineItems: InvoicePdfLineItem[] = (invoice.line_items ?? []).map(
-          (item: any) => ({
+          (item: PrismaInvoiceLineItem) => ({
             description: item.description,
             amountUsdc: item.amount_usdc.toString(),
             quantity: item.quantity,

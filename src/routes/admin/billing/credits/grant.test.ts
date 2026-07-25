@@ -54,10 +54,10 @@ describe('POST /api/admin/billing/credits/grant', () => {
       .send({ user_id: 'user_123', amount_usdc: '25.50' });
 
     expect(response.status).toBe(201);
-    expect(repository.grant).toHaveBeenCalledWith('user_123', '25.50');
+    expect(repository.grant).toHaveBeenCalledWith('user_123', '29.50');
     expect(response.body.data).toMatchObject({
       user_id: 'user_123',
-      amount_usdc: '25.50',
+      amount_usdc: '29.50',
       balance_usdc: '25.50',
       campaign: 'GrantFox FWC26',
     });

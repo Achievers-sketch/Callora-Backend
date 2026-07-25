@@ -73,6 +73,8 @@ export class AuthController {
         next(new UnauthorizedError('Refresh token is required', 'MISSING_REFRESH_TOKEN'));
         return;
       }
+      
+      const requestId = getRequestId(req);
 
       // Verify the refresh token structure and signature
       const tokenPayload = this.refreshTokenService.verifyRefreshToken(refreshToken);
@@ -148,7 +150,7 @@ export class AuthController {
         accessToken: newTokenPair.accessToken,
         refreshToken: newTokenPair.refreshToken,
         tokenType: 'Bearer'
-      });
+      }, requestId));
 
     } catch (error) {
       logger.error('[AuthController] Error refreshing token', { error });
@@ -169,6 +171,8 @@ export class AuthController {
         return;
       }
 
+      const requestId = getRequestId(req);
+
       const tokenPayload = this.refreshTokenService.verifyRefreshToken(refreshToken);
       if (!tokenPayload) {
         next(new UnauthorizedError('Invalid refresh token', 'INVALID_REFRESH_TOKEN'));
@@ -186,7 +190,7 @@ export class AuthController {
           userId: tokenPayload.userId
         });
         // Still return success to avoid token enumeration attacks
-        res.json({ message: 'Token revoked successfully' });
+        res.json(successEnvelope({ message: 'Token revoked successfully' }, requestId));
         return;
       }
 
@@ -197,7 +201,7 @@ export class AuthController {
           userId: tokenPayload.userId
         });
         // Still return success to avoid token enumeration attacks
-        res.json({ message: 'Token revoked successfully' });
+        res.json(successEnvelope({ message: 'Token revoked successfully' }, requestId));
         return;
       }
 
@@ -208,7 +212,7 @@ export class AuthController {
         tokenId: storedToken.id
       });
 
-      res.json({ message: 'Token revoked successfully' });
+      res.json(successEnvelope({ message: 'Token revoked successfully' }, requestId));
 
     } catch (error) {
       logger.error('[AuthController] Error revoking token', { error });
@@ -222,18 +226,20 @@ export class AuthController {
    */
   async revokeAllTokens(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).developerId || res.locals.authenticatedUser?.id;
+      const userId = req.developerId || res.locals.authenticatedUser?.id;
 
       if (!userId) {
         next(new UnauthorizedError('User not authenticated', 'NOT_AUTHENTICATED'));
         return;
       }
 
+      const requestId = getRequestId(req);
+
       await this.refreshTokenRepository.revokeAllUserTokens(userId);
 
       logger.info('[AuthController] All refresh tokens revoked for user', { userId });
 
-      res.json({ message: 'All tokens revoked successfully' });
+      res.json(successEnvelope({ message: 'All tokens revoked successfully' }, requestId));
 
     } catch (error) {
       logger.error('[AuthController] Error revoking all tokens', { error });
@@ -247,16 +253,18 @@ export class AuthController {
    */
   async getTokenInfo(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).developerId || res.locals.authenticatedUser?.id;
+      const userId = req.developerId || res.locals.authenticatedUser?.id;
 
       if (!userId) {
         next(new UnauthorizedError('User not authenticated', 'NOT_AUTHENTICATED'));
         return;
       }
 
+      const requestId = getRequestId(req);
+
       const activeTokenCount = await this.refreshTokenRepository.countActiveTokens(userId);
 
-      res.json({
+      res.json(successEnvelope({
         activeRefreshTokens: activeTokenCount,
         maxAllowedTokens: 5
       });

@@ -3,8 +3,9 @@ import express from 'express';
 import { createDeveloperRouter } from './developerRoutes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import type { Developer } from '../db/schema.js';
-import type { UpdateDeveloperProfileInput } from '../types/developer.js';
-import { apiKeyRepository } from '../repositories/apiKeyRepository.js';
+import type { UpdateDeveloperProfileInput, SettlementStore } from '../types/developer.js';
+import type { UsageStore } from '../types/gateway.js';
+import type { DeveloperRepository } from '../repositories/developerRepository.js';
 
 const mockSettlementStore = {
   create: jest.fn(),
@@ -43,9 +44,9 @@ const app = express();
 app.use(express.json());
 // Mount the router
 app.use('/api/developers', createDeveloperRouter({
-  settlementStore: mockSettlementStore as any,
-  usageStore: mockUsageStore as any,
-  developerRepository: mockDeveloperRepository as any,
+  settlementStore: mockSettlementStore as unknown as SettlementStore,
+  usageStore: mockUsageStore as unknown as UsageStore,
+  developerRepository: mockDeveloperRepository as unknown as DeveloperRepository,
 }));
 // Error handler to catch UnauthorizedError
 app.use(errorHandler);
@@ -247,10 +248,10 @@ describe('GET /api/developers/exports', () => {
   exportsApp.use(
     '/api/developers',
     createDeveloperRouter({
-      settlementStore: mockSettlementStore as any,
-      usageStore: mockUsageStore as any,
-      developerRepository: mockDeveloperRepository as any,
-      reportExporterService: mockReportExporterService as any,
+      settlementStore: mockSettlementStore as unknown as SettlementStore,
+      usageStore: mockUsageStore as unknown as UsageStore,
+      developerRepository: mockDeveloperRepository as unknown as DeveloperRepository,
+      reportExporterService: mockReportExporterService as unknown as import('../services/reportExporter.js').ReportExporterService,
     }),
   );
   exportsApp.use(errorHandler);

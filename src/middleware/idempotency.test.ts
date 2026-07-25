@@ -29,11 +29,11 @@ function makeReq(overrides: Partial<{
     body,
     method: 'POST',
     path: '/api/billing/deduct',
-    app: { locals: { dbPool: undefined } } as any, // overridden per test
+    app: { locals: { dbPool: undefined } } as unknown as Request['app'], // overridden per test
   };
 }
 
-function makeRes(userId = 'user-1'): any {
+function makeRes(userId = 'user-1'): Partial<Response> & { locals: { authenticatedUser: { id: string } }; statusCode: number; setHeader: jest.Mock; json: jest.Mock } {
   return {
     status: jest.fn().mockReturnThis(),
     json: jest.fn().mockReturnThis(),
@@ -100,10 +100,10 @@ describe('idempotencyMiddleware — unit', () => {
   it('skips if no idempotency key is provided', async () => {
     const mockDb = makeDb();
     const req = makeReq({ idempotencyKeyHeader: undefined }) as Request;
-    (req as any).body = {};
+    (req as unknown as { body: Record<string, unknown> }).body = {};
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -116,7 +116,7 @@ describe('idempotencyMiddleware — unit', () => {
     const req = makeReq({ idempotencyKeyHeader: '   ' }) as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -129,7 +129,7 @@ describe('idempotencyMiddleware — unit', () => {
     const req = makeReq() as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -164,7 +164,7 @@ describe('idempotencyMiddleware — unit', () => {
     const req = makeReq({ body }) as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -191,7 +191,7 @@ describe('idempotencyMiddleware — payload mismatch (issue #427)', () => {
     const req = makeReq({ body: { amountUsdc: '1.00', apiId: 'api-1' } }) as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -215,7 +215,7 @@ describe('idempotencyMiddleware — payload mismatch (issue #427)', () => {
     const req = makeReq({ body }) as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -238,7 +238,7 @@ describe('idempotencyMiddleware — payload mismatch (issue #427)', () => {
     const body = { zzz: '1', aaa: '2', mmm: '3' };
     const req = makeReq({ body }) as Request;
     const res = makeRes();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -256,7 +256,7 @@ describe('idempotencyMiddleware — payload mismatch (issue #427)', () => {
     }]);
     const req = makeReq({ body: { amount: '5.00' } }) as Request;
     const res = makeRes();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -285,7 +285,7 @@ describe('idempotencyMiddleware — payload mismatch (issue #427)', () => {
     const req = makeReq({ body: bodyB }) as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -304,7 +304,7 @@ describe('idempotencyMiddleware — payload mismatch (issue #427)', () => {
     const req = makeReq({ body: { amountUsdc: '99.00' } }) as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -333,7 +333,7 @@ describe('idempotencyMiddleware — in-progress and error paths', () => {
     const req = makeReq({ body }) as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -349,7 +349,7 @@ describe('idempotencyMiddleware — in-progress and error paths', () => {
     const req = makeReq() as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 
@@ -369,7 +369,7 @@ describe('idempotencyMiddleware — in-progress and error paths', () => {
     const req = makeReq() as Request;
     const res = makeRes();
     const next = jest.fn();
-    (req as any).app = { locals: { dbPool: mockDb } };
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
 
     await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
 

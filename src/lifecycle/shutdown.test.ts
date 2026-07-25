@@ -1,10 +1,10 @@
 /// <reference types="jest" />
 import type { Server } from 'http';
 import type { Socket } from 'net';
+import type { Request, Response } from 'express';
 import {
   createGracefulShutdownHandler,
   createInFlightDrainTracker,
-  type DrainableSubsystem,
 } from './shutdown.js';
 
 describe('shutdown module', () => {
@@ -386,10 +386,10 @@ describe('shutdown module', () => {
           listeners.set(event, handler);
           return res;
         }),
-      } as any;
+      } as unknown as Response;
 
       // Start a request
-      tracker.middleware({} as any, res, next);
+      tracker.middleware({} as unknown as Request, res, next);
       expect(next).toHaveBeenCalledTimes(1);
 
       // Begin shutdown
@@ -416,13 +416,13 @@ describe('shutdown module', () => {
       const res = {
         setHeader: jest.fn(),
         once: jest.fn(() => res),
-      } as any;
+      } as unknown as Response;
 
       // Begin shutdown
       tracker.subsystem.beginShutdown();
 
       // New requests should get Connection: close
-      tracker.middleware({} as any, res, jest.fn());
+      tracker.middleware({} as unknown as Request, res, jest.fn());
       expect(res.setHeader).toHaveBeenCalledWith('Connection', 'close');
     });
 
@@ -444,7 +444,7 @@ describe('shutdown module', () => {
           listeners1.set(event, handler);
           return res1;
         }),
-      } as any;
+      } as unknown as Response;
 
       const res2 = {
         setHeader: jest.fn(),
@@ -452,11 +452,11 @@ describe('shutdown module', () => {
           listeners2.set(event, handler);
           return res2;
         }),
-      } as any;
+      } as unknown as Response;
 
       // Start two requests
-      tracker.middleware({} as any, res1, jest.fn());
-      tracker.middleware({} as any, res2, jest.fn());
+      tracker.middleware({} as unknown as Request, res1, jest.fn());
+      tracker.middleware({} as unknown as Request, res2, jest.fn());
 
       tracker.subsystem.beginShutdown();
       const idlePromise = tracker.subsystem.awaitIdle();
@@ -486,9 +486,9 @@ describe('shutdown module', () => {
           listeners.set(event, handler);
           return res;
         }),
-      } as any;
+      } as unknown as Response;
 
-      tracker.middleware({} as any, res, jest.fn());
+      tracker.middleware({} as unknown as Request, res, jest.fn());
       tracker.subsystem.beginShutdown();
 
       // Complete via close instead of finish
@@ -505,9 +505,9 @@ describe('shutdown module', () => {
           listeners.set(event, handler);
           return res;
         }),
-      } as any;
+      } as unknown as Response;
 
-      tracker.middleware({} as any, res, jest.fn());
+      tracker.middleware({} as unknown as Request, res, jest.fn());
       tracker.subsystem.beginShutdown();
 
       // Fire both events

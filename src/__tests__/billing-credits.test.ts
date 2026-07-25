@@ -253,8 +253,8 @@ describe('GET /api/billing/credits', () => {
         id: 5,
         user_id: TEST_USER_ID,
         balance_usdc: '25.00',
-        created_at: null as any, // Simulating missing timestamp
-        updated_at: null as any,
+        created_at: null as unknown as Date, // Simulating missing timestamp
+        updated_at: null as unknown as Date,
       };
 
       mockCreditsRepository.getOrCreateByUserId.mockResolvedValue(mockCredit);

@@ -1,7 +1,5 @@
 import express from 'express';
 import type { Server } from 'node:http';
-import dns from 'node:dns/promises';
-import type { LookupAddress } from 'node:dns';
 import { createProxyRouter } from '../routes/proxyRoutes.js';
 import {
   legacyV1DeprecationMiddleware,

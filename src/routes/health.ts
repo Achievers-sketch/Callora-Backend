@@ -4,8 +4,12 @@ import { pool } from '../db.js';
 import { config } from '../config/index.js';
 import { performHealthCheck } from '../services/healthCheck.js';
 import { activeMaintenanceWindow } from './admin/maintenance.js'; // <-- Added maintenance state import
+import { createDbHealthRouter } from './health/db.js';
 
 const router = Router();
+
+// Mount the new DB pool stats endpoint
+router.use('/db', createDbHealthRouter());
 
 router.get('/', async (_req, res) => {
   const now = new Date();
