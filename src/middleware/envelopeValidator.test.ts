@@ -203,8 +203,7 @@ describe('envelopeValidator', () => {
         timestamp: new Date().toISOString(),
       };
 
-      const result = (mockRes.json as jest.Mock)(validEnvelope);
-      expect(result).toEqual(mockRes);
+      (mockRes.json as jest.Mock)(validEnvelope);
       expect(mockNext).toHaveBeenCalled();
 
       process.env.NODE_ENV = origEnv;

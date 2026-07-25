@@ -25,13 +25,14 @@ export class AuthController {
    */
   async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const requestId = getRequestId(req);
       const { refreshToken } = req.body;
 
       if (!refreshToken) {
         next(new UnauthorizedError('Refresh token is required', 'MISSING_REFRESH_TOKEN'));
         return;
       }
+      
+      const requestId = getRequestId(req);
 
       // Verify the refresh token structure and signature
       const tokenPayload = this.refreshTokenService.verifyRefreshToken(refreshToken);
@@ -115,13 +116,14 @@ export class AuthController {
    */
   async revokeToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const requestId = getRequestId(req);
       const { refreshToken } = req.body;
 
       if (!refreshToken) {
         next(new UnauthorizedError('Refresh token is required', 'MISSING_REFRESH_TOKEN'));
         return;
       }
+
+      const requestId = getRequestId(req);
 
       const tokenPayload = this.refreshTokenService.verifyRefreshToken(refreshToken);
       if (!tokenPayload) {
@@ -176,7 +178,6 @@ export class AuthController {
    */
   async revokeAllTokens(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const requestId = getRequestId(req);
       // This endpoint should be protected by requireAuth middleware
       const userId = (req as any).developerId || res.locals.authenticatedUser?.id;
 
@@ -184,6 +185,8 @@ export class AuthController {
         next(new UnauthorizedError('User not authenticated', 'NOT_AUTHENTICATED'));
         return;
       }
+
+      const requestId = getRequestId(req);
 
       await this.refreshTokenRepository.revokeAllUserTokens(userId);
 
@@ -203,13 +206,14 @@ export class AuthController {
    */
   async getTokenInfo(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const requestId = getRequestId(req);
       const userId = (req as any).developerId || res.locals.authenticatedUser?.id;
 
       if (!userId) {
         next(new UnauthorizedError('User not authenticated', 'NOT_AUTHENTICATED'));
         return;
       }
+
+      const requestId = getRequestId(req);
 
       const activeTokenCount = await this.refreshTokenRepository.countActiveTokens(userId);
 

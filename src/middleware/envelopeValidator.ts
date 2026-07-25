@@ -1,8 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import {
   ENVELOPE_REQUIRED_FIELDS,
-  SUCCESS_REQUIRED_FIELDS,
-  ERROR_REQUIRED_FIELDS,
 } from '../types/ResponseEnvelope.js';
 
 /**
