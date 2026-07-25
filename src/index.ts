@@ -10,7 +10,7 @@ import { legacyV1DeprecationMiddleware } from "./middleware/deprecation.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { createGatewayIpAllowlist } from "./middleware/ipAllowlist.js";
 import { createAccessLogMiddleware } from "./middleware/accessLog.js";
-import { requestIdMiddleware } from "./middleware/requestId.js";
+import { requestIdMiddleware, responseEnrichMiddleware } from "./middleware/requestId.js";
 import { metricsEndpoint } from "./metrics.js";
 import {
   awaitWebhookDispatcherIdle,
@@ -62,6 +62,7 @@ export {
 export const app = express();
 
 app.use(requestIdMiddleware);
+app.use(responseEnrichMiddleware);
 app.use(
   createAccessLogMiddleware({
     sampleRate: config.accessLog.sampleRate,
