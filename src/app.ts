@@ -36,6 +36,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { performHealthCheck, type HealthCheckConfig } from './services/healthCheck.js';
 import { createDependenciesRouter } from './routes/health/dependencies.js';
 import quotaRequestsRouter from './routes/quota/requests.js';
+import refundsRouter from './routes/refunds.js';
 import { parsePagination, paginatedResponse } from './lib/pagination.js';
 import { InMemoryVaultRepository, type VaultRepository } from './repositories/vaultRepository.js';
 import { DepositController } from './controllers/depositController.js';
@@ -317,6 +318,9 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
 
   // Quota self-service — developers submit requests, admins manage via /api/admin/quota/requests
   app.use('/api/quota/requests', quotaRequestsRouter);
+
+  // Refunds — developers submit refund requests, admins approve/reject
+  app.use('/api/refunds', refundsRouter);
 
   // Prometheus metrics endpoint — auth-gated in production
   app.get('/api/metrics', metricsEndpoint);
