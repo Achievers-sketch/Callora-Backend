@@ -13,6 +13,7 @@ import {
   approveQuotaRequest,
   rejectQuotaRequest,
 } from '../services/quotaService.js';
+import { createAdminQuotaBulkRouter } from './admin/quotas/bulk.js';
 import { createAdminWebhooksRouter } from './admin/webhooks.js';
 import { createAdminApisRouter } from './admin/apis.js';
 import { createAdminHealthProbesRouter } from './admin/health/probes.js';
@@ -28,7 +29,7 @@ const router = Router();
 // Apply IP allowlist check before authentication
 router.use(createAdminIpAllowlist());
 router.use(adminAuth);
-router.use(adminLogMiddleware); // <--- Add this line here!
+router.use(adminLogMiddleware);
 router.get('/users', async (req, res, next) => {
   try {
     const { limit, offset } = parsePagination(req.query as Record<string, string>);
@@ -201,6 +202,8 @@ router.post('/quota/requests/:id/reject', async (req, res, next) => {
     next(new InternalServerError());
   }
 });
+
+router.use('/quota/requests', createAdminQuotaBulkRouter());
 
 // ---------------------------------------------------------------------------
 // Webhook signing-key rotation + delivery monitoring
