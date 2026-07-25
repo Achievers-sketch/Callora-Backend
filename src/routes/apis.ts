@@ -16,6 +16,10 @@ import {
 } from '../repositories/developerRepository.js';
 import { apiRegistrationSchema, bulkEndpointsSchema } from '../validators/apiRegistration.js';
 import { createRateLimitMiddleware } from '../middleware/rateLimit.js';
+import { defaultAuditService, type AuditService } from '../services/auditService.js';
+import type { AuditContext } from '../middleware/auditEnrich.js';
+import { logger } from '../middleware/logging.js';
+import type { Request } from 'express';
 
 export interface ApisRouterDeps {
   apiRepository?: ApiRepository;
@@ -24,13 +28,45 @@ export interface ApisRouterDeps {
   cache?: ListingsCache;
   /** Optional rate limit middleware for the public API routes. */
   rateLimitMiddleware?: ReturnType<typeof createRateLimitMiddleware>;
+  /** Persists audit rows for state-changing calls. Defaults to the pg-backed service. */
+  auditService?: AuditService;
 }
 
 export function createApisRouter(deps: ApisRouterDeps = {}): Router {
   const router = Router();
   const apiRepository = deps.apiRepository ?? defaultApiRepository;
   const developerRepository = deps.developerRepository ?? defaultDeveloperRepository;
+  const auditService = deps.auditService ?? defaultAuditService;
   const cache = deps.cache ?? listingsCache;
+
+  // Persist an audit row for a state-changing call. Best-effort: a failed audit
+  // write is logged but never fails the underlying request, which has already
+  // committed by the time this runs.
+  async function recordApiAudit(
+    req: Request,
+    event: string,
+    actor: string,
+    details: Record<string, unknown>,
+  ): Promise<void> {
+    const ctx = (req as Request & { auditContext?: AuditContext }).auditContext;
+    try {
+      await auditService.record({
+        event,
+        actor,
+        tenantId: ctx?.tenantId ?? null,
+        clientIp: ctx?.clientIp ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        correlationId: ctx?.correlationId ?? null,
+        bodyHash: ctx?.bodyHash ?? null,
+        details,
+      });
+    } catch (error) {
+      logger.error(
+        { event, actor, correlationId: ctx?.correlationId, err: error },
+        'Failed to persist audit log for API mutation',
+      );
+    }
+  }
   const rateLimitMiddleware = deps.rateLimitMiddleware ?? createRateLimitMiddleware({
     windowMs: 60_000,
     maxRequests: 60,
@@ -137,6 +173,18 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
           })),
         });
 
+        await recordApiAudit(req, 'API_CREATE', user.id, {
+          apiId: api.id,
+          before: null,
+          after: {
+            name: payload.name,
+            base_url: payload.base_url,
+            category: payload.category,
+            status: 'active',
+            endpointCount: payload.endpoints.length,
+          },
+        });
+
         res.status(201).json(api);
       } catch (error) {
         next(error);
@@ -190,6 +238,18 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
             description: ep.description ?? null,
           })),
         );
+
+        await recordApiAudit(req, 'API_ENDPOINTS_BULK_CREATE', user.id, {
+          apiId,
+          before: null,
+          after: {
+            addedEndpointCount: payload.endpoints.length,
+            addedEndpoints: payload.endpoints.map((ep) => ({
+              path: ep.path,
+              method: ep.method,
+            })),
+          },
+        });
 
         res.status(201).json({ endpoints });
       } catch (error) {
