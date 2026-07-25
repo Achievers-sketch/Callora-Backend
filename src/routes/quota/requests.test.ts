@@ -228,8 +228,8 @@ describe('POST /api/quota/requests', () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('VALIDATION_ERROR');
-    expect(Array.isArray(res.body.details)).toBe(true);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(Array.isArray(res.body.error.details)).toBe(true);
   });
 
   it('400 VALIDATION_ERROR - invalid requested_tier enum', async () => {
@@ -241,7 +241,7 @@ describe('POST /api/quota/requests', () => {
       .send({ requested_tier: 'ultra', reason: 'Need ultra tier for high traffic volume' });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('400 VALIDATION_ERROR - reason too short (< 10 chars)', async () => {
@@ -253,7 +253,7 @@ describe('POST /api/quota/requests', () => {
       .send({ requested_tier: 'pro', reason: 'Short' });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('400 VALIDATION_ERROR - reason too long (> 1000 chars)', async () => {
@@ -265,7 +265,7 @@ describe('POST /api/quota/requests', () => {
       .send({ requested_tier: 'pro', reason: 'x'.repeat(1001) });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('400 VALIDATION_ERROR - missing reason entirely', async () => {
@@ -277,7 +277,7 @@ describe('POST /api/quota/requests', () => {
       .send({ requested_tier: 'pro' });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('400 VALIDATION_ERROR - missing requested_tier entirely', async () => {
@@ -289,7 +289,7 @@ describe('POST /api/quota/requests', () => {
       .send({ reason: 'Need higher rate limits for production workload' });
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('401 - no authentication provided', async () => {
@@ -563,7 +563,7 @@ describe('GET /api/quota/requests/:id', () => {
       .set('x-user-id', 'dev-1');
 
     expect(res.status).toBe(404);
-    expect(res.body.code).toBe('QUOTA_REQUEST_NOT_FOUND');
+    expect(res.body.error.code).toBe('QUOTA_REQUEST_NOT_FOUND');
   });
 
   it('404 QUOTA_REQUEST_NOT_FOUND - ID belongs to different developer (ownership guard)', async () => {
@@ -583,7 +583,7 @@ describe('GET /api/quota/requests/:id', () => {
       .set('x-user-id', 'dev-1');
 
     expect(res.status).toBe(404);
-    expect(res.body.code).toBe('QUOTA_REQUEST_NOT_FOUND');
+    expect(res.body.error.code).toBe('QUOTA_REQUEST_NOT_FOUND');
   });
 
   it('401 - no authentication provided (get by id)', async () => {

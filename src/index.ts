@@ -360,6 +360,10 @@ if (isDirectExecution) {
         { timeoutMs: config.listingsCache.warmupTimeoutMs },
       );
 
+      // Warm the quotas cache before accepting traffic to avoid cold-cache spikes on startup.
+      const { warmupQuotasCache } = await import("./services/quotasCacheWarm.js");
+      await warmupQuotasCache({ timeoutMs: config.quotasCache.warmupTimeoutMs });
+
       revenueLedgerIndexerJob.start();
       settlementStatusSyncJob.start();
       settlementReconJob.start();

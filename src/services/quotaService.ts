@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../logger.js';
 import { NotFoundError, ConflictError } from '../errors/index.js';
+import { quotasCache } from './quotasCacheWarm.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -126,6 +127,7 @@ export async function createQuotaRequest(input: CreateQuotaRequestInput): Promis
     requestedTier: input.requestedTier,
   });
 
+  quotasCache.invalidateAll();
   return request;
 }
 
@@ -141,8 +143,16 @@ export async function getQuotaRequest(requestId: string): Promise<QuotaRequest> 
 export async function listQuotaRequests(filter?: {
   status?: QuotaRequestStatus;
 }): Promise<QuotaRequest[]> {
+  const cacheKey = filter?.status ?? 'all';
+  const cached = quotasCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   const store = getQuotaRequestStore();
-  return store.list(filter);
+  const result = await store.list(filter);
+  quotasCache.set(cacheKey, result);
+  return result;
 }
 
 export async function approveQuotaRequest(
@@ -188,6 +198,7 @@ export async function approveQuotaRequest(
     adminNotes,
   });
 
+  quotasCache.invalidateAll();
   return updated!;
 }
 
@@ -222,6 +233,7 @@ export async function rejectQuotaRequest(
     adminNotes,
   });
 
+  quotasCache.invalidateAll();
   return updated!;
 }
 
