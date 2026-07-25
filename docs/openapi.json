@@ -103,6 +103,95 @@
         }
       }
     },
+    "/api/health": {
+      "get": {
+        "summary": "Application health check",
+        "description": "Returns the health status of the application and its dependencies (database, Soroban RPC, Horizon). Public endpoint — no authentication required.",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "Application is healthy or partially degraded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "examples": {
+                  "simpleOk": {
+                    "summary": "Simple health check (no config)",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "status": "ok",
+                        "service": "callora-backend"
+                      },
+                      "requestId": "req-mock-uuid",
+                      "timestamp": "2026-07-25T10:00:00.000Z"
+                    }
+                  },
+                  "fullOk": {
+                    "summary": "Full health check — all dependencies healthy",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "status": "ok",
+                        "version": "1.0.0",
+                        "timestamp": "2026-07-25T10:00:00.000Z",
+                        "checks": {
+                          "api": "ok",
+                          "database": "ok",
+                          "soroban_rpc": "ok"
+                        }
+                      },
+                      "requestId": "req-mock-uuid",
+                      "timestamp": "2026-07-25T10:00:00.000Z"
+                    }
+                  },
+                  "degraded": {
+                    "summary": "Degraded — database slow, optional dep down",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "status": "degraded",
+                        "version": "1.0.0",
+                        "timestamp": "2026-07-25T10:00:00.000Z",
+                        "checks": {
+                          "api": "ok",
+                          "database": "degraded",
+                          "soroban_rpc": "down"
+                        }
+                      },
+                      "requestId": "req-mock-uuid",
+                      "timestamp": "2026-07-25T10:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application is down or health check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "serviceUnavailable": {
+                    "summary": "Health check failure",
+                    "value": {
+                      "code": "SERVICE_UNAVAILABLE",
+                      "message": "Health check failed",
+                      "requestId": "req-mock-uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/gateway/health/{apiSlug}": {
       "get": {
         "summary": "Get gateway health for an API",
@@ -148,7 +237,7 @@
         "description": "Deducts USDC from the user's vault balance to pay for an API call. Authenticated and idempotent.",
         "externalDocs": {
           "description": "SDK idempotency contract and retry guidance",
-          "url": "./sdk/billing-deduct.md"
+          "url": "https://callora.com/sdk/billing-deduct.md"
         },
         "security": [
           {
@@ -3375,6 +3464,77 @@
           "resolved_by": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "HealthChecks": {
+        "type": "object",
+        "description": "Per-dependency health check statuses.",
+        "required": ["api"],
+        "properties": {
+          "api": {
+            "type": "string",
+            "enum": ["ok", "degraded", "down"],
+            "description": "API server health"
+          },
+          "database": {
+            "type": "string",
+            "enum": ["ok", "degraded", "down"],
+            "description": "Database connection health"
+          },
+          "soroban_rpc": {
+            "type": "string",
+            "enum": ["ok", "degraded", "down"],
+            "description": "Soroban RPC connectivity"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": ["ok", "degraded", "down"],
+            "description": "Horizon API connectivity"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "description": "Health check response in success envelope.",
+        "required": ["success", "data", "requestId", "timestamp"],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["ok", "degraded", "down"],
+                "description": "Aggregate health status"
+              },
+              "service": {
+                "type": "string",
+                "description": "Service name (simple mode)"
+              },
+              "version": {
+                "type": "string",
+                "description": "Application version"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "checks": {
+                "$ref": "#/components/schemas/HealthChecks"
+              }
+            }
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Correlation ID for the request"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
