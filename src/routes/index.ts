@@ -15,6 +15,7 @@ import { createUsageByEndpointRouter } from './usage/byEndpoint.js';
 import { createExportSchedulesRouter } from './exports/schedules.js';
 import type { ScheduledExportsService } from '../services/scheduledExports.js';
 import { createSubscriptionRouter } from './subscriptionRoutes.js';
+import { createRefreshTokenRouter } from './refresh-token.js';
 import type { SubscriptionRepository } from '../repositories/subscriptionRepository.js';
 import type { DeveloperRepository } from '../repositories/developerRepository.js';
 import type { ApiRepository } from '../repositories/apiRepository.js';
@@ -70,6 +71,9 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
       }),
     );
   }
+
+  // Refresh token listing with cursor pagination — authenticated users list their tokens.
+  router.use('/refresh-token', createRefreshTokenRouter());
 
   // Per-developer concurrency middleware for billing routes — applied BEFORE
   // the rate limiter so concurrency rejections are fast-fail and don't consume
