@@ -239,6 +239,10 @@ class FakeApiRepository implements ApiRepository {
     return restored;
   }
 
+  async findRawById(id: number): Promise<Api | null> {
+    return null;
+  }
+
   async bulkCreateEndpoints() {
     return [];
   }

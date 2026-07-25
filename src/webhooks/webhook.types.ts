@@ -3,7 +3,19 @@ export type WebhookEventType =
     | 'settlement_completed'
     | 'low_balance_alert'
     | 'quota.threshold.reached'
-    | 'invoice_created';
+    | 'invoice_created'
+    | 'usage.anomaly.detected'
+    | 'fee_abstraction.executed';
+
+export interface RetryPolicy {
+    maxRetries?: number;
+    baseDelayMs?: number;
+}
+
+export const DEFAULT_RETRY_POLICY: RetryPolicy = {
+    maxRetries: 3,
+    baseDelayMs: 1000,
+};
 
 export interface WebhookConfig {
     developerId: string;
