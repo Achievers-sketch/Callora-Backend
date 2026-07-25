@@ -4,6 +4,7 @@ import type { RefreshTokenRepository } from '../repositories/refreshTokenReposit
 import { logger } from '../logger.js';
 import { UnauthorizedError } from '../errors/index.js';
 import { getClientIp, DEFAULT_PROXY_HEADERS } from '../lib/clientIp.js';
+import { successEnvelope, getRequestId } from '../lib/envelope.js';
 
 export interface AuthControllerOptions {
   refreshTokenService: RefreshTokenService;
@@ -146,7 +147,7 @@ export class AuthController {
         familyId: storedToken.familyId
       });
 
-      res.json({
+      res.json(successEnvelope({
         accessToken: newTokenPair.accessToken,
         refreshToken: newTokenPair.refreshToken,
         tokenType: 'Bearer'
@@ -267,7 +268,7 @@ export class AuthController {
       res.json(successEnvelope({
         activeRefreshTokens: activeTokenCount,
         maxAllowedTokens: 5
-      });
+      }, requestId));
 
     } catch (error) {
       logger.error('[AuthController] Error getting token info', { error });
