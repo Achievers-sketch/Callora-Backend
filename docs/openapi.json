@@ -2011,6 +2011,344 @@
           }
         }
       }
+    },
+    "/api/admin/circuit-breakers": {
+      "get": {
+        "summary": "List all circuit breakers",
+        "description": "Returns all registered circuit breakers with their current state and metrics. Requires admin authentication and the admin IP allowlist.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "listCircuitBreakers",
+        "responses": {
+          "200": {
+            "description": "List of circuit breakers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string",
+                            "description": "Unique circuit breaker identifier (API slug)"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": ["closed", "open", "half-open"],
+                            "description": "Current state of the circuit breaker"
+                          },
+                          "metrics": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": ["CLOSED", "OPEN", "HALF_OPEN"]
+                              },
+                              "consecutiveFailures": {
+                                "type": "integer"
+                              },
+                              "consecutiveSuccesses": {
+                                "type": "integer"
+                              },
+                              "totalFailures": {
+                                "type": "integer"
+                              },
+                              "totalSuccesses": {
+                                "type": "integer"
+                              },
+                              "lastFailureTime": {
+                                "type": ["integer", "null"],
+                                "description": "Unix timestamp in milliseconds"
+                              },
+                              "lastStateChange": {
+                                "type": "integer",
+                                "description": "Unix timestamp in milliseconds"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required"
+          }
+        }
+      }
+    },
+    "/api/admin/circuit-breakers/{breakerKey}": {
+      "get": {
+        "summary": "Get circuit breaker details",
+        "description": "Returns detailed state and metrics for a specific circuit breaker. Requires admin authentication and the admin IP allowlist.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "getCircuitBreaker",
+        "parameters": [
+          {
+            "name": "breakerKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+            },
+            "description": "Circuit breaker identifier (alphanumeric, hyphens, underscores; max 128 chars)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Circuit breaker details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "slug": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["closed", "open", "half-open"]
+                        },
+                        "metrics": {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": ["CLOSED", "OPEN", "HALF_OPEN"]
+                            },
+                            "consecutiveFailures": {
+                              "type": "integer"
+                            },
+                            "consecutiveSuccesses": {
+                              "type": "integer"
+                            },
+                            "totalFailures": {
+                              "type": "integer"
+                            },
+                            "totalSuccesses": {
+                              "type": "integer"
+                            },
+                            "lastFailureTime": {
+                              "type": ["integer", "null"]
+                            },
+                            "lastStateChange": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "Admin authentication required"
+          },
+          "404": {
+            "description": "Circuit breaker not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/circuit-breakers/{breakerKey}/reset": {
+      "post": {
+        "summary": "Force-reset a circuit breaker to CLOSED",
+        "description": "Force-resets a circuit breaker to the CLOSED state, immediately allowing requests to flow again. Requires admin authentication and the admin IP allowlist.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "resetCircuitBreaker",
+        "parameters": [
+          {
+            "name": "breakerKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+            },
+            "description": "Circuit breaker identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Circuit breaker reset to CLOSED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "slug": {
+                          "type": "string"
+                        },
+                        "priorState": {
+                          "type": "string",
+                          "enum": ["closed", "open", "half-open"]
+                        },
+                        "currentState": {
+                          "type": "string",
+                          "enum": ["closed"]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "Admin authentication required"
+          },
+          "404": {
+            "description": "Circuit breaker not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/circuit-breakers/{breakerKey}/trip": {
+      "post": {
+        "summary": "Force-trip a circuit breaker to OPEN",
+        "description": "Force-trips a circuit breaker to the OPEN state, immediately rejecting all requests. Useful for manual intervention or emergency shutdown of a downstream dependency. Requires admin authentication and the admin IP allowlist.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tripCircuitBreaker",
+        "parameters": [
+          {
+            "name": "breakerKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+            },
+            "description": "Circuit breaker identifier"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "description": "Optional reason for the manual trip"
+                  }
+                }
+              },
+              "example": {
+                "reason": "Emergency maintenance"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Circuit breaker tripped to OPEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "slug": {
+                          "type": "string"
+                        },
+                        "priorState": {
+                          "type": "string",
+                          "enum": ["closed", "open", "half-open"]
+                        },
+                        "currentState": {
+                          "type": "string",
+                          "enum": ["open"]
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "Present only when the breaker was already open"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "Admin authentication required"
+          }
+        }
+      }
     }
   },
   "components": {

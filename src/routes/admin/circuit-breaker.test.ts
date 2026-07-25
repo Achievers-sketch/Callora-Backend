@@ -27,6 +27,7 @@ import {
   BreakerRegistry,
   CircuitBreakerState,
 } from '../../lib/circuitBreaker.js';
+import { AppError } from '../../errors/index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -109,6 +110,31 @@ describe('Admin Circuit Breaker Endpoint', () => {
       const res = await request(app).get('/api/admin/circuit-breakers');
       expect(res.status).toBe(401);
     });
+
+    it('returns 500 when registry.list() throws a non-AppError', async () => {
+      const mockRegistry = {
+        list: jest.fn().mockRejectedValue(new Error('unexpected')),
+      } as unknown as BreakerRegistry;
+      const app = buildApp(mockRegistry);
+      const res = await request(app)
+        .get('/api/admin/circuit-breakers')
+        .set('x-admin-api-key', ADMIN_KEY);
+
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+    });
+
+    it('returns the original status when registry.list() throws an AppError', async () => {
+      const mockRegistry = {
+        list: jest.fn().mockRejectedValue(new AppError('quota exceeded', 429, 'RATE_LIMITED')),
+      } as unknown as BreakerRegistry;
+      const app = buildApp(mockRegistry);
+      const res = await request(app)
+        .get('/api/admin/circuit-breakers')
+        .set('x-admin-api-key', ADMIN_KEY);
+
+      expect(res.status).toBe(429);
+    });
   });
 
   // ── GET /api/admin/circuit-breakers/:breakerKey ──────────────────────
@@ -154,6 +180,29 @@ describe('Admin Circuit Breaker Endpoint', () => {
       const app = buildApp(registry);
       const res = await request(app).get('/api/admin/circuit-breakers/my-api');
       expect(res.status).toBe(401);
+    });
+
+    it('returns 500 when getMetrics throws a non-AppError', async () => {
+      const breaker = registry.getOrCreate('boom-api');
+      jest.spyOn(breaker, 'getMetrics').mockRejectedValue(new Error('db connection lost'));
+      const app = buildApp(registry);
+      const res = await request(app)
+        .get('/api/admin/circuit-breakers/boom-api')
+        .set('x-admin-api-key', ADMIN_KEY);
+
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+    });
+
+    it('returns the original status when getMetrics throws an AppError', async () => {
+      const breaker = registry.getOrCreate('apperror-api');
+      jest.spyOn(breaker, 'getMetrics').mockRejectedValue(new AppError('rate limit', 429, 'RATE_LIMITED'));
+      const app = buildApp(registry);
+      const res = await request(app)
+        .get('/api/admin/circuit-breakers/apperror-api')
+        .set('x-admin-api-key', ADMIN_KEY);
+
+      expect(res.status).toBe(429);
     });
   });
 
@@ -217,6 +266,29 @@ describe('Admin Circuit Breaker Endpoint', () => {
       const res = await request(app)
         .post('/api/admin/circuit-breakers/my-api/reset');
       expect(res.status).toBe(401);
+    });
+
+    it('returns 500 when reset throws a non-AppError', async () => {
+      const breaker = registry.getOrCreate('fail-reset-api');
+      jest.spyOn(breaker, 'reset').mockRejectedValue(new Error('disk full'));
+      const app = buildApp(registry);
+      const res = await request(app)
+        .post('/api/admin/circuit-breakers/fail-reset-api/reset')
+        .set('x-admin-api-key', ADMIN_KEY);
+
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+    });
+
+    it('returns the original status when reset throws an AppError', async () => {
+      const breaker = registry.getOrCreate('apperror-reset');
+      jest.spyOn(breaker, 'reset').mockRejectedValue(new AppError('forbidden', 403, 'FORBIDDEN'));
+      const app = buildApp(registry);
+      const res = await request(app)
+        .post('/api/admin/circuit-breakers/apperror-reset/reset')
+        .set('x-admin-api-key', ADMIN_KEY);
+
+      expect(res.status).toBe(403);
     });
   });
 
@@ -308,6 +380,31 @@ describe('Admin Circuit Breaker Endpoint', () => {
         .send({ reason: 'x'.repeat(513) });
 
       expect(res.status).toBe(400);
+    });
+
+    it('returns 500 when trip throws a non-AppError', async () => {
+      const breaker = registry.getOrCreate('fail-trip-api');
+      jest.spyOn(breaker, 'trip').mockRejectedValue(new Error('network timeout'));
+      const app = buildApp(registry);
+      const res = await request(app)
+        .post('/api/admin/circuit-breakers/fail-trip-api/trip')
+        .set('x-admin-api-key', ADMIN_KEY)
+        .send({ reason: 'trigger error' });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+    });
+
+    it('returns the original status when trip throws an AppError', async () => {
+      const breaker = registry.getOrCreate('apperror-trip');
+      jest.spyOn(breaker, 'trip').mockRejectedValue(new AppError('service unavailable', 503, 'SERVICE_UNAVAILABLE'));
+      const app = buildApp(registry);
+      const res = await request(app)
+        .post('/api/admin/circuit-breakers/apperror-trip/trip')
+        .set('x-admin-api-key', ADMIN_KEY)
+        .send({ reason: 'test' });
+
+      expect(res.status).toBe(503);
     });
   });
 });
