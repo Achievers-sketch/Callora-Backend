@@ -187,6 +187,45 @@ export const envSchema = z
     // Body size limits
     REQUEST_BODY_LIMIT: z.string().default('100kb'),
     GATEWAY_BODY_LIMIT: z.string().default('1mb'),
+    ROUTE_BODY_LIMITS: z
+      .string()
+      .optional()
+      .transform((value, ctx) => {
+        if (!value || value.trim().length === 0) {
+          return [];
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(value);
+        } catch (error) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `ROUTE_BODY_LIMITS must be valid JSON: ${(error as Error).message}`,
+          });
+          return z.NEVER;
+        }
+
+        if (!Array.isArray(parsed)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'ROUTE_BODY_LIMITS must be a JSON array of route body-limit objects',
+          });
+          return z.NEVER;
+        }
+
+        return parsed.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object');
+      })
+      .pipe(
+        z.array(
+          z.object({
+            method: z.string().min(1),
+            route: z.string().min(1),
+            limit: z.string().min(1),
+          }),
+        ),
+      )
+      .default([]),
 
     // Security
     BCRYPT_COST_FACTOR: z.coerce.number().int().min(10).max(31).default(12),

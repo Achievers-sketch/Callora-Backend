@@ -11,6 +11,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { createGatewayIpAllowlist } from "./middleware/ipAllowlist.js";
 import { createAccessLogMiddleware } from "./middleware/accessLog.js";
 import { requestIdMiddleware, responseEnrichMiddleware } from "./middleware/requestId.js";
+import { createRouteBodyLimitMiddleware } from "./middleware/routeBodyLimit.js";
 import { metricsEndpoint } from "./metrics.js";
 import {
   awaitWebhookDispatcherIdle,
@@ -84,6 +85,8 @@ initSloRecorder({
   observationWindowMs: config.sloAlert.observationWindowMs,
 });
 app.use(sloRecorderMiddleware);
+
+app.use(createRouteBodyLimitMiddleware(config.routeBodyLimits));
 
 // Standard JSON middleware for non-webhook routes
 app.use((req, res, next) => {
