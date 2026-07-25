@@ -301,7 +301,7 @@ interface MetricEntry {
 
 async function getUpstreamMetricValues(): Promise<MetricEntry[]> {
   const metrics = await register.getMetricsAsJSON();
-  const found = metrics.find((m: any) => m.name === 'gateway_upstream_duration_seconds');
+  const found = metrics.find((m: { name: string }) => m.name === 'gateway_upstream_duration_seconds');
   return (found?.values ?? []) as MetricEntry[];
 }
 

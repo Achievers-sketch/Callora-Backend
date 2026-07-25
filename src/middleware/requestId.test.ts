@@ -57,7 +57,7 @@ describe('requestId middleware', () => {
     } as unknown as Response;
 
     const next = (() => {
-      assert.equal((req as any).id, 'test-id-123');
+      assert.equal((req as unknown as { id?: string }).id, 'test-id-123');
       assert.equal(getRequestId(), 'test-id-123');
       done();
     }) as NextFunction;
@@ -79,14 +79,14 @@ describe('requestId middleware', () => {
     } as unknown as Response;
 
     const next = (() => {
-      assert.ok((req as any).id, 'req.id must be set');
+      assert.ok((req as unknown as { id?: string }).id, 'req.id must be set');
       assert.ok(setHeaderValue, 'response X-Request-Id must be set');
-      assert.equal((req as any).id, setHeaderValue);
+      assert.equal((req as unknown as { id?: string }).id, setHeaderValue);
 
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       assert.match(setHeaderValue ?? '', uuidRegex);
-      assert.match((req as any).id, uuidRegex);
-      assert.equal(getRequestId(), (req as any).id);
+      assert.match((req as unknown as { id?: string }).id ?? '', uuidRegex);
+      assert.equal(getRequestId(), (req as unknown as { id?: string }).id);
 
       done();
     }) as NextFunction;
@@ -106,7 +106,7 @@ describe('requestId middleware', () => {
     } as unknown as Response;
 
     const next = (() => {
-      assert.equal((req as any).id, 'test-trim-id');
+      assert.equal((req as unknown as { id?: string }).id, 'test-trim-id');
       done();
     }) as NextFunction;
 

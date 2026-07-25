@@ -1,4 +1,5 @@
 import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import request from 'supertest';
 import type { Pool, QueryResult } from 'pg';
 import { createExplainRouter } from './explain.js';
@@ -7,14 +8,14 @@ import { requestIdMiddleware } from '../../middleware/requestId.js';
 import { logger } from '../../logger.js';
 
 jest.mock('../../middleware/adminAuth', () => ({
-  adminAuth: jest.fn((_req: any, _res: any, next: any) => {
+  adminAuth: jest.fn((_req: Request, _res: Response, next: NextFunction) => {
     _res.locals = { ..._res.locals, adminActor: 'test-admin' };
     next();
   }),
 }));
 
 jest.mock('../../middleware/ipAllowlist', () => ({
-  createAdminIpAllowlist: jest.fn(() => (_req: any, _res: any, next: any) => next()),
+  createAdminIpAllowlist: jest.fn(() => (_req: Request, _res: Response, next: NextFunction) => next()),
 }));
 
 jest.mock('../../logger', () => {

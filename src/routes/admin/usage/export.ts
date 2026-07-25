@@ -28,8 +28,7 @@ const parseDateParam = (value: unknown): Date | null | undefined => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const ALLOWED_FORMATS = ['csv', 'json'] as const;
-type ExportFormat = (typeof ALLOWED_FORMATS)[number];
+type ExportFormat = 'csv' | 'json';
 
 export interface AdminUsageExportRouterDeps {
   pool?: Pool;

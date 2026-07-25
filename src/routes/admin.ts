@@ -10,7 +10,6 @@ import { logger } from '../logger.js';
 import { createUsageStore, type UsageAdminStore } from '../services/usageStore.js';
 import {
   listQuotaRequests,
-  getQuotaRequest,
   approveQuotaRequest,
   rejectQuotaRequest,
 } from '../services/quotaService.js';

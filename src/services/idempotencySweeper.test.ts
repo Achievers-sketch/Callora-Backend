@@ -18,7 +18,7 @@ describe('idempotency sweeper', () => {
         .mockResolvedValueOnce({ rowCount: 2 })
         .mockResolvedValueOnce({ rows: [{ row_count: '5' }] })
         .mockResolvedValueOnce({}),
-    } as any;
+    } as unknown as { query: jest.Mock };
 
     const rowCount = await sweepIdempotencyStoreRows(mockPool);
 
@@ -38,9 +38,9 @@ describe('idempotency sweeper', () => {
     );
 
     const metrics = await register.getMetricsAsJSON();
-    const gauge = metrics.find((m: any) => m.name === 'idempotency_store_rows');
+    const gauge = metrics.find((m: { name: string }) => m.name === 'idempotency_store_rows');
     expect(gauge).toBeDefined();
-    expect(gauge!.values.some((value: any) => Number(value.value) === 5)).toBe(true);
+    expect(gauge!.values.some((value: { value: string | number }) => Number(value.value) === 5)).toBe(true);
   });
 
   it('skips delete when lock is held by another instance and still updates the gauge', async () => {
@@ -49,7 +49,7 @@ describe('idempotency sweeper', () => {
         .fn()
         .mockResolvedValueOnce({ rows: [{ acquired: false }] })
         .mockResolvedValueOnce({ rows: [{ row_count: '3' }] }),
-    } as any;
+    } as unknown as { query: jest.Mock };
 
     const rowCount = await sweepIdempotencyStoreRows(mockPool);
 
@@ -84,7 +84,7 @@ describe('idempotency sweeper', () => {
         }
         return { rows: [] };
       }),
-    } as any;
+    } as unknown as { query: jest.Mock };
 
     const job = createIdempotencySweeperJob(mockPool, { intervalMs: 1000 });
     job.start();
