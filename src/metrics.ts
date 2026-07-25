@@ -72,6 +72,30 @@ const httpRequestDuration = new client.Histogram({
   buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
 });
 
+// ── HTTP request duration summary ─────────────────────────────────────────────
+//
+// Client-side computed quantiles with a `quantile` label exposing p50 / p95 / p99
+// directly in the Prometheus scrape output. Complements the histogram above:
+//   - Histogram  → server-side aggregation via histogram_quantile() in PromQL
+//   - Summary    → direct percentile labels for dashboards that want precomputed
+//                  p50/p95/p99 per (method, route, status_code, route_group)
+//
+// Security / cardinality notes:
+//   - `maxAgeSeconds` and `ageBuckets` cap memory and prevent unbounded growth
+//     of the internal quantile estimator per label combination.
+//   - Label set is identical to the histogram (method / route / status_code /
+//     route_group), which is already bounded by route-normalisation rules.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const httpRequestDurationSummary = new client.Summary({
+  name: 'http_request_duration_summary_seconds',
+  help: 'Duration of HTTP requests in seconds with precomputed p50 / p95 / p99 percentiles per route',
+  labelNames: ['method', 'route', 'status_code', 'route_group'],
+  percentiles: [0.5, 0.95, 0.99],
+  maxAgeSeconds: 5 * 60,
+  ageBuckets: 5,
+});
+
 // ── HTTP request counter ──────────────────────────────────────────────────────
 
 const httpRequestsTotal = new client.Counter({
@@ -81,6 +105,7 @@ const httpRequestsTotal = new client.Counter({
 });
 
 register.registerMetric(httpRequestDuration);
+register.registerMetric(httpRequestDurationSummary);
 register.registerMetric(httpRequestsTotal);
 
 // ── Gateway upstream profiling ─────────────────────────────────────────────
@@ -234,7 +259,8 @@ export function normalizeRouteForMetrics(
  *   - This prevents cardinality explosion from dynamic path segments, bots, or attacks
  */
 export const metricsMiddleware = (req: Request, res: Response, next: NextFunction): void => {
-  const endTimer = httpRequestDuration.startTimer();
+  const endHistogramTimer = httpRequestDuration.startTimer();
+  const endSummaryTimer = httpRequestDurationSummary.startTimer();
 
   res.on('finish', () => {
     // Normalize the route to a safe cardinality label
@@ -254,7 +280,8 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
     };
 
     httpRequestsTotal.inc(labels);
-    endTimer(labels);
+    endHistogramTimer(labels);
+    endSummaryTimer(labels);
   });
 
   next();
@@ -415,6 +442,7 @@ export function resetUpstreamMetrics(): void {
 /** Exposed for testing — reset all HTTP metrics. */
 export function resetHttpMetrics(): void {
   httpRequestDuration.reset();
+  httpRequestDurationSummary.reset();
   httpRequestsTotal.reset();
 }
 
