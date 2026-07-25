@@ -271,10 +271,7 @@ export const ErrorCode = {
   AUTH_NOT_IMPLEMENTED: "AUTH_NOT_IMPLEMENTED",
 
   /** A required system component is not configured */
-  COMPONENT_NOT_CONFIGURED: "COMPONENT_NOT_CONFIGURED",
-
-  /** Webhook retry policy is invalid */
-  INVALID_RETRY_POLICY: "INVALID_RETRY_POLICY"
+  COMPONENT_NOT_CONFIGURED: "COMPONENT_NOT_CONFIGURED"
 
 } as const;
 

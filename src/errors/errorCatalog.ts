@@ -123,9 +123,6 @@ export const ErrorCode = {
 
   // Health / dependency probes
   COMPONENT_NOT_CONFIGURED: "COMPONENT_NOT_CONFIGURED",
-
-  // Webhook retry
-  INVALID_RETRY_POLICY: "INVALID_RETRY_POLICY",
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

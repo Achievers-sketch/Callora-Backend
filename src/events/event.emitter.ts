@@ -138,6 +138,7 @@ calloraEvents.on('usage.anomaly.detected', (developerId, data) => {
 });
 calloraEvents.on('fee_abstraction.executed', (developerId, data) => {
   return handleEvent('fee_abstraction.executed', developerId, data);
+});
 calloraEvents.on('usage_event.created', (developerId, data) => {
   return handleEvent('usage_event.created', developerId, data);
 });
