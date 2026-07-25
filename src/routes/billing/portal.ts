@@ -22,6 +22,7 @@ export interface PrismaInvoiceLineItem {
 
 export interface PrismaInvoice {
   id: string;
+  user_id: string;
   invoice_number: string;
   status: string;
   total_amount_usdc: bigint;
@@ -91,7 +92,7 @@ function invoiceToResponse(invoice: PrismaInvoice) {
   };
 }
 
-export function createBillingPortalRouter(prisma: PrismaClient = defaultPrisma as PrismaClient): Router {
+export function createBillingPortalRouter(prisma: PrismaClient = defaultPrisma as unknown as PrismaClient): Router {
   const router = Router();
 
   async function getPrismaInvoice(id: string, userId: string) {

@@ -5,6 +5,7 @@ export type WebhookEventType =
     | 'quota.threshold.reached'
     | 'invoice_created'
     | 'usage.anomaly.detected'
+    | 'fee_abstraction.executed'
     | 'usage_event.created';
 
 export interface WebhookConfig {

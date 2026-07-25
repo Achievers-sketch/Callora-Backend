@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import type { StringValue } from 'ms';
 import { logger } from '../logger.js';
 import type { 
   RefreshTokenPayload, 
@@ -11,14 +12,14 @@ import type { RefreshTokenRepository } from '../repositories/refreshTokenReposit
 
 export interface RefreshTokenServiceOptions {
   jwtSecret: string;
-  accessTokenExpiry: string;
-  refreshTokenExpiry: string;
+  accessTokenExpiry: StringValue | number;
+  refreshTokenExpiry: StringValue | number;
 }
 
 export class RefreshTokenService {
   private readonly jwtSecret: string;
-  private readonly accessTokenExpiry: string;
-  private readonly refreshTokenExpiry: string;
+  private readonly accessTokenExpiry: StringValue | number;
+  private readonly refreshTokenExpiry: StringValue | number;
 
   constructor(options: RefreshTokenServiceOptions) {
     this.jwtSecret = options.jwtSecret;
@@ -140,7 +141,8 @@ export class RefreshTokenService {
   /**
    * Parse expiry string to seconds
    */
-  private parseExpiry(expiry: string): number {
+  private parseExpiry(expiry: StringValue | number): number {
+    if (typeof expiry === 'number') return expiry;
     const match = expiry.match(/^(\d+)(ms|[smhd])$/);
     if (!match) {
       throw new Error(`Invalid expiry format: ${expiry}`);

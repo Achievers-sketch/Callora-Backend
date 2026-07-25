@@ -293,7 +293,7 @@ const UNKNOWN_ROUTE_SENTINEL = '_unknown';
  * This ensures metrics cardinality stays bounded regardless of URL
  * parameter values, bot activity, or path-scanning attacks.
  */
-function normalizeRouteForMetrics(
+export function normalizeRouteForMetrics(
   matched: string | undefined,
   baseUrl: string | undefined,
   unmatched: string,
@@ -867,4 +867,49 @@ export function resetReplicaMetrics(): void {
   dbPrimaryQueriesTotal.reset();
   dbReplicaFallbacksTotal.reset();
   dbReplicaFailuresTotal.reset();
+}
+
+// ── SLO alert metrics ───────────────────────────────────────────────────────
+
+const sloAlerterRunsTotal = new client.Counter({
+  name: 'slo_alerter_runs_total',
+  help: 'Number of SLO alerter poll cycles',
+});
+
+const sloAlertsTotal = new client.Counter({
+  name: 'slo_alerts_total',
+  help: 'Number of SLO alerts fired',
+  labelNames: ['route', 'kind'] as const,
+});
+
+const sloActiveBurns = new client.Gauge({
+  name: 'slo_active_burns',
+  help: 'Number of currently active SLO burns',
+});
+
+const sloRecorderSamplesTotal = new client.Counter({
+  name: 'slo_recorder_samples_total',
+  help: 'Number of recorder samples processed',
+  labelNames: ['route'] as const,
+});
+
+register.registerMetric(sloAlerterRunsTotal);
+register.registerMetric(sloAlertsTotal);
+register.registerMetric(sloActiveBurns);
+register.registerMetric(sloRecorderSamplesTotal);
+
+export function recordSloAlerterRun(): void {
+  sloAlerterRunsTotal.inc();
+}
+
+export function recordSloAlert(route: string, kind: string): void {
+  sloAlertsTotal.labels(route, kind).inc();
+}
+
+export function setSloAlertActiveBurns(count: number): void {
+  sloActiveBurns.set(count);
+}
+
+export function recordSloRecorderSample(route: string): void {
+  sloRecorderSamplesTotal.labels(route).inc();
 }
