@@ -4,6 +4,7 @@ import { requireAuth, type AuthenticatedLocals } from '../../middleware/requireA
 import { validate } from '../../middleware/validate.js';
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../../errors/index.js';
 import type { ScheduledExportsService } from '../../services/scheduledExports.js';
+import { exportsAccessLogMiddleware } from '../../middleware/exportsAccessLog.js';
 
 const scheduleBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -23,6 +24,11 @@ const schedulePatchSchema = scheduleBodySchema.partial().refine((value) => Objec
 
 export function createExportSchedulesRouter(service: ScheduledExportsService): Router {
   const router = Router();
+
+  // Structured access logging for all /api/exports/schedules routes.
+  // Emits one JSON entry per request on the 'exports' Pino channel so that
+  // every export operation is auditable independently of the global access log.
+  router.use(exportsAccessLogMiddleware);
 
   router.get('/', requireAuth, async (_req, res, next) => {
     try {
