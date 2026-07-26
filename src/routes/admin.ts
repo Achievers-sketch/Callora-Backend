@@ -19,6 +19,7 @@ import { createAdminHealthProbesRouter } from './admin/health/probes.js';
 import { createAdminCreditGrantsRouter } from './admin/billing/credits/grant.js';
 import { createAdminUsageExportRouter } from './admin/usage/export.js';
 import { createAdminKeyConcurrencyRouter } from './admin/keys/concurrency.js';
+import { createAdminAuditRouter } from './admin/audit.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 const usageStore: UsageAdminStore = createUsageStore();
@@ -236,6 +237,12 @@ router.use('/billing/credits', createAdminCreditGrantsRouter());
 //         GET /api/admin/keys/concurrency/:keyId
 // ---------------------------------------------------------------------------
 router.use('/keys', createAdminKeyConcurrencyRouter());
+
+// ---------------------------------------------------------------------------
+// Admin audit-log listing
+// Mounts: GET /api/admin/audit
+// ---------------------------------------------------------------------------
+router.use('/audit', createAdminAuditRouter());
 
 // ---------------------------------------------------------------------------
 // Maintenance banner

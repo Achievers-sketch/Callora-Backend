@@ -33,6 +33,7 @@ import { requireAuth, type AuthenticatedLocals } from './middleware/requireAuth.
 import { bodyValidator } from './middleware/validate.js';
 import { buildDeveloperAnalytics } from './services/developerAnalytics.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { envelopeValidator } from './middleware/envelopeValidator.js';
 import { performHealthCheck, type HealthCheckConfig } from './services/healthCheck.js';
 import { createDependenciesRouter } from './routes/health/dependencies.js';
 import quotaRequestsRouter from './routes/quota/requests.js';

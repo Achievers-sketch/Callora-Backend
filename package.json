@@ -71,6 +71,7 @@
     "pg-mem": "^3.0.13",
     "picomatch": "^2.3.1",
     "supertest": "^7.2.2",
+    "testcontainers": "^10.10.4",
     "ts-jest": "^29.4.6",
     "tsx": "^4.7.0",
     "typescript": "^5.9.3",
