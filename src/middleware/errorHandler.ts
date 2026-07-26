@@ -3,6 +3,17 @@ import { isAppError } from '../errors/index.js';
 import { logger } from '../logger.js';
 import type { ValidationErrorDetail } from './validate.js';
 import { ValidationError } from './validate.js';
+import { buildErrorEnvelope, type ErrorEnvelope } from './envelope.js';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+export interface ErrorResponseBody {
+  message: string;
+  code: string;
+  requestId: string;
+  details?: ValidationErrorDetail[];
+}
+
 import { errorEnvelope } from '../lib/envelope.js';
 import type { ErrorEnvelope } from '../types/ResponseEnvelope.js';
 
@@ -75,7 +86,6 @@ export function errorHandler(
   res: Response<ErrorEnvelope>,
   _next: NextFunction
 ): void {
-  // AppError subclasses carry statusCode; Express body-parser errors carry status (e.g. 413)
   const statusCode = isAppError(err)
     ? err.statusCode
     : typeof (err as Record<string, unknown>).status === 'number'
@@ -92,12 +102,13 @@ export function errorHandler(
   const code = isAppError(err) ? (err.code ?? deriveErrorCode(statusCode)) : deriveErrorCode(statusCode);
   const requestId = req.id || 'unknown';
 
-  // Security: In production, mask the message for unexpected (non-AppError) errors
   let finalMessage = rawMessage;
   if (isProduction && !isAppError(err)) {
     finalMessage = 'Internal server error';
   }
 
+  const details = extractValidationDetails(err);
+  const body = buildErrorEnvelope(code, finalMessage, requestId, details);
   // Build error envelope with optional validation details
   const details = extractValidationDetails(err);
   const body: ErrorEnvelope = errorEnvelope(
@@ -111,7 +122,6 @@ export function errorHandler(
     res.status(statusCode).json(body);
   }
 
-  // Log full error server-side (including stack in dev)
   const logData = {
     requestId,
     statusCode,
