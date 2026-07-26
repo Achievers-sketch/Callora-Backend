@@ -996,7 +996,7 @@
     "/api/apis": {
       "get": {
         "summary": "List public APIs",
-        "description": "Returns a paginated list of public active APIs, optionally filtered by category or search term.",
+        "description": "Returns a paginated list of public active APIs, optionally filtered by category or search term. Successful responses include a strong ETag; clients may send If-None-Match for conditional GET (304 when unchanged).",
         "parameters": [
           {
             "name": "limit",
@@ -1031,15 +1031,44 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "description": "Strong ETag from a previous listings response. When it matches the current representation, the server returns 304 Not Modified.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Successfully retrieved list of public APIs",
+            "headers": {
+              "ETag": {
+                "description": "Strong SHA-256 ETag of the JSON response body",
+                "schema": {
+                  "type": "string",
+                  "example": "\"a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456\""
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApisListResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified — the listings representation matches If-None-Match; response body is empty",
+            "headers": {
+              "ETag": {
+                "description": "Strong ETag of the unchanged representation",
+                "schema": {
+                  "type": "string"
                 }
               }
             }
