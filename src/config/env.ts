@@ -94,6 +94,9 @@ export const envSchema = z
     RATE_LIMIT_STORE: z.string().optional(),
     RATE_LIMIT_PG_TABLE: z.string().optional(),
 
+    // Auth per-request timeout (graceful timeout with 504 Gateway Timeout)
+    AUTH_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
     // Login rate limiting (IP-based throttling for auth attempts)
     LOGIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(5),
     LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000), // 1 minute sliding window
