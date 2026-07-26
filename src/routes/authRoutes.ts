@@ -3,9 +3,11 @@ import { AuthController } from '../controllers/authController.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { bodyValidator } from '../middleware/validate.js';
 import { createLoginThrottle } from '../middleware/loginThrottle.js';
-import { refreshTokenHistogramMiddleware } from '../middleware/metricsHistogram.js';
+import { createTimeoutMiddleware } from '../middleware/timeout.js';
 import { config } from '../config/index.js';
 import { z } from 'zod';
+
+const authTimeout = createTimeoutMiddleware({ timeoutMs: config.authTimeoutMs });
 
 const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required')
@@ -26,6 +28,12 @@ const walletLoginSchema = z.object({
 
 export function createAuthRoutes(authController: AuthController): Router {
   const router = Router();
+
+  // Apply graceful per-request timeout to all auth routes.
+  // If a request exceeds the timeout the middleware sends a 504 Gateway
+  // Timeout and provides an AbortSignal on req.abortSignal for cooperative
+  // cancellation downstream.
+  router.use(authTimeout);
 
   // POST /auth/wallet - Wallet-based login with IP throttling
   // Rate limited to prevent brute force attacks
