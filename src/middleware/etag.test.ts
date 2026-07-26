@@ -12,7 +12,61 @@
 
 import request from 'supertest';
 import express from 'express';
-import { etagMiddleware } from './etag.js';
+import { etagMiddleware, generateETag, etagMatches } from './etag.js';
+
+describe('generateETag', () => {
+  test('returns a quoted hex-digest string (strong ETag format)', () => {
+    const tag = generateETag('hello world');
+    expect(tag).toMatch(/^"[0-9a-f]{64}"$/);
+  });
+
+  test('is deterministic for the same input', () => {
+    expect(generateETag('foo')).toBe(generateETag('foo'));
+  });
+
+  test('differs for different inputs', () => {
+    expect(generateETag('foo')).not.toBe(generateETag('bar'));
+  });
+
+  test('accepts a Buffer', () => {
+    const tag = generateETag(Buffer.from('hello'));
+    expect(tag).toMatch(/^"[0-9a-f]{64}"$/);
+    expect(tag).toBe(generateETag('hello'));
+  });
+
+  test('does not include a W/ weak prefix', () => {
+    expect(generateETag('test')).not.toContain('W/');
+  });
+});
+
+describe('etagMatches', () => {
+  const etag = '"abc123"';
+
+  test('matches an identical strong ETag', () => {
+    expect(etagMatches(etag, etag)).toBe(true);
+  });
+
+  test('wildcard * matches any ETag', () => {
+    expect(etagMatches('*', etag)).toBe(true);
+    expect(etagMatches('  *  ', etag)).toBe(true);
+  });
+
+  test('does not match a different ETag', () => {
+    expect(etagMatches('"xyz999"', etag)).toBe(false);
+  });
+
+  test('does not match a weak version of the same digest (strong comparison)', () => {
+    expect(etagMatches('W/"abc123"', etag)).toBe(false);
+  });
+
+  test('matches when the target ETag is one of several comma-separated tags', () => {
+    expect(etagMatches('"other1", "abc123", "other2"', etag)).toBe(true);
+  });
+
+  test('does not match when the list contains only unrelated tags', () => {
+    expect(etagMatches('"other1", "other2"', etag)).toBe(false);
+  });
+});
 
   test('matches when the target ETag is one of several comma-separated tags', () => {
     expect(etagMatches('"other1", "abc123", "other2"', etag)).toBe(true);
@@ -29,7 +83,6 @@ import { etagMiddleware } from './etag.js';
 describe('etagMiddleware', () => {
   function makeApp(handler: Parameters<typeof express.Router.prototype.get>[1]) {
     const app = express();
-    // Disable Express's built-in weak-ETag so we only test our middleware
     app.disable('etag');
     app.get('/test', etagMiddleware, handler);
     return app;
@@ -43,7 +96,6 @@ describe('etagMiddleware', () => {
     const res = await request(app).get('/test');
     expect(res.status).toBe(200);
     expect(res.headers.etag).toBeDefined();
-    // Strong ETag: starts with a double-quote, 64-char SHA-256 hex, no W/ prefix
     expect(res.headers.etag).toMatch(/^"[0-9a-f]{64}"$/);
     expect(res.body).toEqual({ message: 'hello world' });
   });
@@ -106,11 +158,9 @@ describe('etagMiddleware', () => {
 
     const first = await request(app).get('/test');
     const etag = first.headers.etag as string;
-    // Build a weak ETag: W/"<hex>" — prepend W/ to the quoted digest
     const weakTag = `W/${etag}`;
 
     const second = await request(app).get('/test').set('If-None-Match', weakTag);
-    // Strong comparison — weak client ETags must NOT produce a 304
     expect(second.status).toBe(200);
   });
 
@@ -151,6 +201,31 @@ describe('etagMiddleware', () => {
     const res = await request(app).get('/test');
     expect(res.status).toBe(404);
     // Our middleware only sets ETag on 200 OK
+    expect(res.headers.etag).toBeUndefined();
+  });
+
+  test('does not override an ETag that is already set by the route', async () => {
+    const existingTag = '"preset-etag"';
+    const app = express();
+    app.disable('etag');
+    app.get('/test', etagMiddleware, (_req, res) => {
+      res.setHeader('ETag', existingTag);
+      res.json({ data: 'y' });
+    });
+
+    const res = await request(app).get('/test');
+    expect(res.headers.etag).toBe(existingTag);
+  });
+
+  test('does not set ETag for non-200 status codes', async () => {
+    const app = express();
+    app.disable('etag');
+    app.get('/test', etagMiddleware, (_req, res) => {
+      res.status(404).json({ error: 'not found' });
+    });
+
+    const res = await request(app).get('/test');
+    expect(res.status).toBe(404);
     expect(res.headers.etag).toBeUndefined();
   });
 });

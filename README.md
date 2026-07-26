@@ -70,7 +70,7 @@ The migration is in `migrations/0019_disputes.sql` (rollback: `migrations/0019_d
 
 - Health check: `GET /api/health`
 - Marketplace routes:
-  - `GET /api/apis`
+  - `GET /api/apis` — public listings with strong ETag / `304 Not Modified` conditional GET support (see [docs/api-listings-etag.md](./docs/api-listings-etag.md))
   - `GET /api/apis/:id`
   - `POST /api/apis` for authenticated developers to register an API with priced endpoints
 - Usage route: `GET /api/usage`

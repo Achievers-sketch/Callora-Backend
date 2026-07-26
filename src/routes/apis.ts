@@ -74,6 +74,13 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
 
   router.use(rateLimitMiddleware);
 
+  /**
+   * GET /api/apis — public marketplace listings with conditional GET support.
+   *
+   * `etagMiddleware` attaches a strong SHA-256 `ETag` to successful 200
+   * responses. Clients may send `If-None-Match: <etag>` on subsequent polls;
+   * an unchanged listing returns `304 Not Modified` with an empty body.
+   */
   router.get('/', etagMiddleware, async (req, res, next) => {
     try {
       const { limit, offset } = parsePagination(req.query as Record<string, string>);

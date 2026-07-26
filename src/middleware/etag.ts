@@ -6,8 +6,7 @@ import { createHash } from 'crypto';
  *
  * Strong ETags are byte-for-byte identical comparisons (RFC 7232 §2.1).
  * We use SHA-256 over the serialised response body so any change in content —
- * including pagination metadata, cursor, or a single field value — produces a
- * different tag.
+ * including pagination metadata or a single field value — produces a different tag.
  *
  * Format: `"<hex-digest>"`
  */
@@ -33,7 +32,7 @@ export function etagMatches(ifNoneMatch: string, etag: string): boolean {
   if (trimmed === '*') return true;
 
   // Split on commas, strip surrounding whitespace from each token
-  const clientTags = trimmed.split(',').map(t => t.trim());
+  const clientTags = trimmed.split(',').map((t) => t.trim());
 
   for (const tag of clientTags) {
     // Only strong tags can match under strong comparison.
@@ -69,8 +68,8 @@ export function etagMatches(ifNoneMatch: string, etag: string): boolean {
  * Only GET / HEAD requests are intercepted.  POST / PATCH / DELETE requests
  * pass through unchanged so the middleware cannot suppress mutation responses.
  *
- * Mount as a route-level middleware on `GET /api/admin/audit` to avoid
- * adding hashing overhead to every endpoint in the application.
+ * Mount as a route-level middleware (e.g. on `GET /api/apis`) to avoid adding
+ * hashing overhead to every endpoint in the application.
  */
 export function etagMiddleware(req: Request, res: Response, next: NextFunction): void {
   // Only intercept safe, idempotent methods
@@ -81,8 +80,8 @@ export function etagMiddleware(req: Request, res: Response, next: NextFunction):
 
   const originalJson = res.json.bind(res);
 
-  res.send = function (body?: unknown): Response {
-    // Only generate ETag for 200 OK responses where ETag is not already set
+  res.json = function (body?: unknown): Response {
+    // Only attach ETags to successful 200 responses that don't already have one
     if (res.statusCode !== 200 || res.get('ETag')) {
       return originalJson(body);
     }
@@ -110,9 +109,8 @@ export function etagMiddleware(req: Request, res: Response, next: NextFunction):
       }
 
       // Strong-comparison says no match, but Express's built-in `fresh` module
-      // uses WEAK comparison (match === 'W/' + etag || 'W/' + match === etag),
-      // which would incorrectly return 304 for a client sending a weak tag
-      // against our strong tag.  Clear the header from the request so Express
+      // uses WEAK comparison, which would incorrectly return 304 for a client
+      // sending a weak tag against our strong tag. Clear the header so Express
       // never sees it and cannot override our 200 decision.
       delete req.headers['if-none-match'];
     }
