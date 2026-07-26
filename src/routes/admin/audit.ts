@@ -1,11 +1,15 @@
 /**
- * Admin audit-log listing with cursor pagination.
+ * Admin audit-log listing with cursor pagination and action replay.
  *
- * Route:
- *   GET /api/admin/audit
+ * Routes:
+ *   GET  /api/admin/audit
+ *   POST /api/admin/audit/replay
  *
  * Pagination uses stable keyset ordering over (created_at DESC, id DESC).
  * The opaque `cursor` query param encodes the last row's timestamp and id.
+ *
+ * Replay re-executes a previously logged admin action using the original
+ * parameters stored in the audit row's `details` JSON blob.
  */
 
 import { Router } from 'express';
@@ -26,6 +30,10 @@ import {
   PgAuditLogRepository,
   type AuditLogRepository,
 } from '../../repositories/auditLogRepository.js';
+import {
+  createAdminAuditReplayRouter,
+  type AdminAuditReplayRouterDeps,
+} from './audit/replay.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 
@@ -53,13 +61,16 @@ const parseOptionalString = (value: unknown): string | undefined => {
   return trimmed === '' ? undefined : trimmed;
 };
 
-export interface AdminAuditRouterDeps {
+export interface AdminAuditRouterDeps
+  extends AdminAuditReplayRouterDeps {
   auditLogRepository?: AuditLogRepository;
 }
 
 export function createAdminAuditRouter(deps: AdminAuditRouterDeps = {}): Router {
   const router = Router();
   const auditLogRepository = deps.auditLogRepository ?? new PgAuditLogRepository();
+
+  router.use('/replay', createAdminAuditReplayRouter(deps));
 
   router.get('/', async (req, res, next) => {
     try {
