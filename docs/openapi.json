@@ -2163,328 +2163,69 @@
         }
       }
     },
-    "/api/admin/circuit-breakers": {
-      "get": {
-        "summary": "List all circuit breakers",
-        "description": "Returns all registered circuit breakers with their current state and metrics. Requires admin authentication and the admin IP allowlist.",
-        "security": [
-          {
-            "adminApiKey": []
-          },
-          {
-            "bearerAuth": []
-          }
-        ],
-        "operationId": "listCircuitBreakers",
-        "responses": {
-          "200": {
-            "description": "List of circuit breakers",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "slug": {
-                            "type": "string",
-                            "description": "Unique circuit breaker identifier (API slug)"
-                          },
-                          "state": {
-                            "type": "string",
-                            "enum": ["closed", "open", "half-open"],
-                            "description": "Current state of the circuit breaker"
-                          },
-                          "metrics": {
-                            "type": "object",
-                            "properties": {
-                              "state": {
-                                "type": "string",
-                                "enum": ["CLOSED", "OPEN", "HALF_OPEN"]
-                              },
-                              "consecutiveFailures": {
-                                "type": "integer"
-                              },
-                              "consecutiveSuccesses": {
-                                "type": "integer"
-                              },
-                              "totalFailures": {
-                                "type": "integer"
-                              },
-                              "totalSuccesses": {
-                                "type": "integer"
-                              },
-                              "lastFailureTime": {
-                                "type": ["integer", "null"],
-                                "description": "Unix timestamp in milliseconds"
-                              },
-                              "lastStateChange": {
-                                "type": "integer",
-                                "description": "Unix timestamp in milliseconds"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Admin authentication required"
-          }
-        }
-      }
-    },
-    "/api/admin/circuit-breakers/{breakerKey}": {
-      "get": {
-        "summary": "Get circuit breaker details",
-        "description": "Returns detailed state and metrics for a specific circuit breaker. Requires admin authentication and the admin IP allowlist.",
-        "security": [
-          {
-            "adminApiKey": []
-          },
-          {
-            "bearerAuth": []
-          }
-        ],
-        "operationId": "getCircuitBreaker",
-        "parameters": [
-          {
-            "name": "breakerKey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
-            },
-            "description": "Circuit breaker identifier (alphanumeric, hyphens, underscores; max 128 chars)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Circuit breaker details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "slug": {
-                          "type": "string"
-                        },
-                        "state": {
-                          "type": "string",
-                          "enum": ["closed", "open", "half-open"]
-                        },
-                        "metrics": {
-                          "type": "object",
-                          "properties": {
-                            "state": {
-                              "type": "string",
-                              "enum": ["CLOSED", "OPEN", "HALF_OPEN"]
-                            },
-                            "consecutiveFailures": {
-                              "type": "integer"
-                            },
-                            "consecutiveSuccesses": {
-                              "type": "integer"
-                            },
-                            "totalFailures": {
-                              "type": "integer"
-                            },
-                            "totalSuccesses": {
-                              "type": "integer"
-                            },
-                            "lastFailureTime": {
-                              "type": ["integer", "null"]
-                            },
-                            "lastStateChange": {
-                              "type": "integer"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "401": {
-            "description": "Admin authentication required"
-          },
-          "404": {
-            "description": "Circuit breaker not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/admin/circuit-breakers/{breakerKey}/reset": {
+    "/api/quota/requests": {
       "post": {
-        "summary": "Force-reset a circuit breaker to CLOSED",
-        "description": "Force-resets a circuit breaker to the CLOSED state, immediately allowing requests to flow again. Requires admin authentication and the admin IP allowlist.",
+        "summary": "Submit a quota request",
+        "description": "Creates a new quota increase request for the authenticated developer. The request remains pending until an admin resolves it.",
         "security": [
           {
-            "adminApiKey": []
-          },
-          {
             "bearerAuth": []
-          }
-        ],
-        "operationId": "resetCircuitBreaker",
-        "parameters": [
-          {
-            "name": "breakerKey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
-            },
-            "description": "Circuit breaker identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Circuit breaker reset to CLOSED",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "slug": {
-                          "type": "string"
-                        },
-                        "priorState": {
-                          "type": "string",
-                          "enum": ["closed", "open", "half-open"]
-                        },
-                        "currentState": {
-                          "type": "string",
-                          "enum": ["closed"]
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "401": {
-            "description": "Admin authentication required"
-          },
-          "404": {
-            "description": "Circuit breaker not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/admin/circuit-breakers/{breakerKey}/trip": {
-      "post": {
-        "summary": "Force-trip a circuit breaker to OPEN",
-        "description": "Force-trips a circuit breaker to the OPEN state, immediately rejecting all requests. Useful for manual intervention or emergency shutdown of a downstream dependency. Requires admin authentication and the admin IP allowlist.",
-        "security": [
-          {
-            "adminApiKey": []
-          },
-          {
-            "bearerAuth": []
-          }
-        ],
-        "operationId": "tripCircuitBreaker",
-        "parameters": [
-          {
-            "name": "breakerKey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
-            },
-            "description": "Circuit breaker identifier"
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "maxLength": 512,
-                    "description": "Optional reason for the manual trip"
+                "$ref": "#/components/schemas/QuotaRequestCreate"
+              },
+              "examples": {
+                "createRequest": {
+                  "summary": "Quota increase request",
+                  "value": {
+                    "requested_tier": "pro",
+                    "reason": "We need a higher monthly call cap for our beta launch.",
+                    "requested_overrides": {
+                      "monthly_call_limit": 250000,
+                      "rate_limit_max_requests": 1000
+                    }
                   }
                 }
-              },
-              "example": {
-                "reason": "Emergency maintenance"
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Circuit breaker tripped to OPEN",
+          "201": {
+            "description": "Quota request created",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "data"
+                  ],
                   "properties": {
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "slug": {
-                          "type": "string"
+                      "$ref": "#/components/schemas/QuotaRequest"
+                    }
+                  }
+                },
+                "examples": {
+                  "createdRequest": {
+                    "summary": "Created quota request",
+                    "value": {
+                      "data": {
+                        "id": "8dbc1b8b-5fe5-4e2f-8ece-9f0d7f9e5743",
+                        "developerId": "dev_123",
+                        "requestedTier": "pro",
+                        "reason": "We need a higher monthly call cap for our beta launch.",
+                        "requestedOverrides": {
+                          "monthlyCallLimit": 250000,
+                          "rateLimitMaxRequests": 1000
                         },
-                        "priorState": {
-                          "type": "string",
-                          "enum": ["closed", "open", "half-open"]
-                        },
-                        "currentState": {
-                          "type": "string",
-                          "enum": ["open"]
-                        },
-                        "reason": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string",
-                          "description": "Present only when the breaker was already open"
-                        }
+                        "status": "pending",
+                        "createdAt": "2026-07-26T12:34:56.000Z"
                       }
                     }
                   }
@@ -2493,10 +2234,285 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/ValidationError"
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "validationError": {
+                    "summary": "Validation error",
+                    "value": {
+                      "code": "VALIDATION_ERROR",
+                      "message": "Request validation failed",
+                      "requestId": "req-abc123"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
-            "description": "Admin authentication required"
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing or invalid authentication",
+                    "value": {
+                      "code": "UNAUTHORIZED",
+                      "message": "Authentication required",
+                      "requestId": "req-abc123"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unprocessable": {
+                    "summary": "Unprocessable entity",
+                    "value": {
+                      "code": "UNPROCESSABLE_ENTITY",
+                      "message": "Request validation failed",
+                      "requestId": "req-abc123"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List quota requests",
+        "description": "Lists the authenticated developer's own quota requests. An optional status query parameter filters the results.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Optional status filter",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of quota requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/QuotaRequest"
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "listSuccess": {
+                    "summary": "List of requests",
+                    "value": {
+                      "data": [
+                        {
+                          "id": "8dbc1b8b-5fe5-4e2f-8ece-9f0d7f9e5743",
+                          "developerId": "dev_123",
+                          "requestedTier": "pro",
+                          "reason": "We need a higher monthly call cap for our beta launch.",
+                          "requestedOverrides": {
+                            "monthlyCallLimit": 250000,
+                            "rateLimitMaxRequests": 1000
+                          },
+                          "status": "pending",
+                          "createdAt": "2026-07-26T12:34:56.000Z"
+                        },
+                        {
+                          "id": "c51082b2-9f67-4f57-8d7e-0784f09e5ea6",
+                          "developerId": "dev_123",
+                          "requestedTier": "enterprise",
+                          "reason": "We are onboarding a larger enterprise customer base.",
+                          "status": "approved",
+                          "adminNotes": "Approved for the next billing cycle.",
+                          "resolvedBy": "admin_42",
+                          "resolvedAt": "2026-07-27T09:00:00.000Z",
+                          "createdAt": "2026-07-25T10:15:00.000Z"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidStatus": {
+                    "summary": "Invalid status value",
+                    "value": {
+                      "code": "BAD_REQUEST",
+                      "message": "status must be one of: pending, approved, rejected",
+                      "requestId": "req-abc123"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing or invalid authentication",
+                    "value": {
+                      "code": "UNAUTHORIZED",
+                      "message": "Authentication required",
+                      "requestId": "req-abc123"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/quota/requests/{id}": {
+      "get": {
+        "summary": "Get a quota request",
+        "description": "Returns a single quota request by ID for the authenticated developer. Requests belonging to another developer appear as not found.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Quota request UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quota request retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuotaRequest"
+                    }
+                  }
+                },
+                "examples": {
+                  "singleRequest": {
+                    "summary": "Single quota request",
+                    "value": {
+                      "data": {
+                        "id": "8dbc1b8b-5fe5-4e2f-8ece-9f0d7f9e5743",
+                        "developerId": "dev_123",
+                        "requestedTier": "pro",
+                        "reason": "We need a higher monthly call cap for our beta launch.",
+                        "requestedOverrides": {
+                          "monthlyCallLimit": 250000,
+                          "rateLimitMaxRequests": 1000
+                        },
+                        "status": "pending",
+                        "createdAt": "2026-07-26T12:34:56.000Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing or invalid authentication",
+                    "value": {
+                      "code": "UNAUTHORIZED",
+                      "message": "Authentication required",
+                      "requestId": "req-abc123"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Quota request not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "notFound": {
+                    "summary": "Quota request missing or inaccessible",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "message": "Quota request not found",
+                      "requestId": "req-abc123"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
