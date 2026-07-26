@@ -6,6 +6,16 @@
  *
  * Pagination uses stable keyset ordering over (created_at DESC, id DESC).
  * The opaque `cursor` query param encodes the last row's timestamp and id.
+ *
+ * Caching
+ * -------
+ * The route emits a strong ETag derived from the SHA-256 digest of the
+ * serialised JSON body.  Repeat requests that supply a matching
+ * `If-None-Match` header receive a `304 Not Modified` response with an empty
+ * body, saving bandwidth for admin dashboards that poll this endpoint.
+ *
+ * The ETag changes whenever any field in the response changes (filters,
+ * cursor, count, or the entries themselves), so stale data is never served.
  */
 
 import { Router } from 'express';
@@ -21,6 +31,7 @@ import {
   InternalServerError,
 } from '../../errors/index.js';
 import { ValidationError } from '../../middleware/validate.js';
+import { etagMiddleware } from '../../middleware/etag.js';
 import { logger } from '../../logger.js';
 import {
   PgAuditLogRepository,
@@ -61,7 +72,16 @@ export function createAdminAuditRouter(deps: AdminAuditRouterDeps = {}): Router 
   const router = Router();
   const auditLogRepository = deps.auditLogRepository ?? new PgAuditLogRepository();
 
-  router.get('/', async (req, res, next) => {
+  /**
+   * GET /api/admin/audit
+   *
+   * Returns a cursor-paginated list of audit-log entries.
+   *
+   * Supports `If-None-Match` conditional requests: when the response body has
+   * not changed since the last fetch, the middleware returns `304 Not Modified`
+   * with no body, cutting bandwidth on repeat polls.
+   */
+  router.get('/', etagMiddleware, async (req, res, next) => {
     try {
       const { limit, cursor: rawCursor } = parseCursorPagination(
         req.query as Record<string, string>,
