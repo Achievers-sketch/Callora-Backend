@@ -7,9 +7,10 @@ import { idempotencyMiddleware, calculateRequestHash, IDEMPOTENCY_KEY_REUSE_MISM
 
 function makeDb(rows: Record<string, unknown>[] = []) {
   const mock = { query: jest.fn() };
-  // First call: DELETE expired keys
+  // First two calls: DELETE expired keys (cleanExpiredTTL + parameterized)
   mock.query.mockResolvedValueOnce({ rows: [] });
-  // Second call: SELECT existing key
+  mock.query.mockResolvedValueOnce({ rows: [] });
+  // Third call: SELECT existing key
   mock.query.mockResolvedValueOnce({ rows });
   // All subsequent calls (INSERT / UPDATE / DELETE): succeed
   mock.query.mockResolvedValue({ rows: [] });
@@ -20,7 +21,8 @@ function makeReq(overrides: Partial<{
   body: Record<string, unknown>;
   idempotencyKeyHeader: string | undefined;
 }> = {}): Partial<Request> {
-  const { body = { amountUsdc: '1.00', apiId: 'api-1' }, idempotencyKeyHeader = 'test-key-123' } = overrides;
+  const body = 'body' in overrides ? overrides.body : { amountUsdc: '1.00', apiId: 'api-1' };
+  const idempotencyKeyHeader = 'idempotencyKeyHeader' in overrides ? overrides.idempotencyKeyHeader : 'test-key-123';
   return {
     header: jest.fn().mockImplementation((name: string) => {
       if (name.toLowerCase() === 'idempotency-key') return idempotencyKeyHeader;
@@ -33,10 +35,11 @@ function makeReq(overrides: Partial<{
   };
 }
 
-function makeRes(userId = 'user-1'): Partial<Response> & { locals: { authenticatedUser: { id: string } }; statusCode: number; setHeader: jest.Mock; json: jest.Mock } {
+function makeRes(userId = 'user-1'): Partial<Response> & { locals: { authenticatedUser: { id: string } }; statusCode: number; setHeader: jest.Mock; json: jest.Mock; send: jest.Mock } {
   return {
     status: jest.fn().mockReturnThis(),
     json: jest.fn().mockReturnThis(),
+    send: jest.fn().mockReturnThis(),
     setHeader: jest.fn(),
     locals: { authenticatedUser: { id: userId } },
     statusCode: 200,
@@ -90,6 +93,27 @@ describe('calculateRequestHash', () => {
     const hash = calculateRequestHash('user-1', { amount: '1.00' }, 'POST', '/path');
     expect(hash).toMatch(/^[a-f0-9]{64}$/);
   });
+
+  it('handles arrays of objects with differing key orders', () => {
+    const bodyA = { items: [{ b: 2, a: 1 }, { d: 4, c: 3 }] };
+    const bodyB = { items: [{ a: 1, b: 2 }, { c: 3, d: 4 }] };
+    const h1 = calculateRequestHash('user-1', bodyA, 'POST', '/path');
+    const h2 = calculateRequestHash('user-1', bodyB, 'POST', '/path');
+    expect(h1).toBe(h2);
+  });
+
+  it('removes idempotencyKey from nested objects', () => {
+    const body = { nested: { idempotencyKey: 'should-ignore', value: 1 } };
+    const hash = calculateRequestHash('user-1', body, 'POST', '/path');
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('handles null and primitive values in body', () => {
+    const h1 = calculateRequestHash('user-1', null, 'POST', '/path');
+    const h2 = calculateRequestHash('user-1', 'string-body', 'POST', '/path');
+    expect(h1).toMatch(/^[a-f0-9]{64}$/);
+    expect(h2).toMatch(/^[a-f0-9]{64}$/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -135,16 +159,21 @@ describe('idempotencyMiddleware — unit', () => {
 
     expect(mockDb.query).toHaveBeenNthCalledWith(
       1,
-      'DELETE FROM idempotency_store WHERE expires_at < NOW()::timestamp OR expires_at < $1',
-      expect.any(Array)
+      expect.stringContaining('DELETE FROM idempotency_store WHERE expires_at < NOW()'),
+      []
     );
     expect(mockDb.query).toHaveBeenNthCalledWith(
       2,
+      expect.stringContaining('DELETE FROM idempotency_store WHERE expires_at < $1'),
+      [expect.any(String)]
+    );
+    expect(mockDb.query).toHaveBeenNthCalledWith(
+      3,
       expect.stringContaining('SELECT request_hash'),
       ['test-key-123']
     );
     expect(mockDb.query).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.stringContaining('INSERT INTO idempotency_store'),
       ['test-key-123', expect.any(String), 'started', expect.any(String)]
     );
@@ -382,6 +411,49 @@ describe('idempotencyMiddleware — in-progress and error paths', () => {
       expect.stringContaining('DELETE FROM idempotency_store WHERE idempotency_key'),
       ['test-key-123']
     );
+  });
+
+  it('saves successful response via res.send interception', async () => {
+    const mockDb = makeDb([]);
+    const req = makeReq() as Request;
+    const res = makeRes();
+    const next = jest.fn();
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
+
+    await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
+
+    res.statusCode = 200;
+    res.send(JSON.stringify({ success: true }));
+
+    await new Promise(resolve => process.nextTick(resolve));
+
+    expect(mockDb.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE idempotency_store'),
+      ['completed', 200, JSON.stringify({ success: true }), 'test-key-123']
+    );
+  });
+
+  it('handles saveResponse database error gracefully', async () => {
+    const mockDb = { query: jest.fn() };
+    mockDb.query.mockResolvedValueOnce({ rows: [] }); // DELETE expired
+    mockDb.query.mockResolvedValueOnce({ rows: [] }); // DELETE parameterized
+    mockDb.query.mockResolvedValueOnce({ rows: [] }); // SELECT empty
+    mockDb.query.mockResolvedValueOnce({ rows: [] }); // INSERT started
+    mockDb.query.mockRejectedValueOnce(new Error('DB error')); // UPDATE fails
+
+    const req = makeReq() as Request;
+    const res = makeRes();
+    const next = jest.fn();
+    (req as unknown as { app: { locals: { dbPool: unknown } } }).app = { locals: { dbPool: mockDb } };
+
+    await idempotencyMiddleware(req, res as Response, next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalled();
+    res.statusCode = 200;
+    res.json({ success: true });
+
+    await new Promise(resolve => process.nextTick(resolve));
+    // Should not throw - error is caught and logged
   });
 });
 

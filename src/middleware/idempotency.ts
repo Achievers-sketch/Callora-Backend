@@ -5,6 +5,16 @@ import { config } from '../config/index.js';
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
 
+export interface IdempotencyConfig {
+  keyFromHeader?: string;
+  keyFromBody?: string;
+  bodyExcludingKeys?: string[];
+  retentionSeconds?: number;
+  cleanExpiredTTL?: boolean;
+  conflictErrorCode?: string;
+  inProgressErrorCode?: string;
+}
+
 /**
  * Error code returned when a client reuses an idempotency key with a
  * different request payload. Distinct from IDEMPOTENCY_IN_PROGRESS so
@@ -32,18 +42,39 @@ function sortObjectKeys(obj: unknown): unknown {
 }
 
 /**
+ * Recursively removes specified keys from an object before hashing.
+ */
+function removeKeys(obj: unknown, keysToRemove: string[]): unknown {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeKeys(item, keysToRemove));
+  }
+  const record = obj as Record<string, unknown>;
+  const filteredObj: Record<string, unknown> = {};
+  for (const key of Object.keys(record)) {
+    if (!keysToRemove.includes(key)) {
+      filteredObj[key] = removeKeys(record[key], keysToRemove);
+    }
+  }
+  return filteredObj;
+}
+
+/**
  * Calculates SHA-256 hash of request metadata and body.
  */
 export function calculateRequestHash(
   userId: string | undefined,
   body: unknown,
   method: string,
-  path: string
+  path: string,
+  bodyExcludingKeys: string[] = ['idempotencyKey']
 ): string {
   const cleanBody = JSON.parse(JSON.stringify(body || {})) as Record<string, unknown>;
-  delete cleanBody.idempotencyKey;
+  const filteredBody = removeKeys(cleanBody, bodyExcludingKeys);
 
-  const sortedBody = sortObjectKeys(cleanBody);
+  const sortedBody = sortObjectKeys(filteredBody);
 
   const payload = {
     userId: userId ?? '',
@@ -59,12 +90,11 @@ export function calculateRequestHash(
  * Idempotency middleware — caches responses keyed by Idempotency-Key header or
  * idempotencyKey body field.  See docs/sdk/billing-deduct.md for the full contract.
  */
-export async function idempotencyMiddleware(req: Request, res: Response, next: NextFunction) {
+export async function idempotencyMiddleware(req: Request, res: Response, next: NextFunction, opts?: IdempotencyConfig) {
   const db = (req.app?.locals?.dbPool ?? pool) as Pool;
 
-  const headerKey = req.header('idempotency-key') || req.header('Idempotency-Key');
-  const bodyKey = req.body?.idempotencyKey;
-  const rawKey = headerKey || bodyKey;
+  const bodyExcludingKeys = opts?.bodyExcludingKeys ?? ['idempotencyKey'];
+  const rawKey = req.header('idempotency-key') || req.header('Idempotency-Key') || req.body?.idempotencyKey;
 
   if (!rawKey || typeof rawKey !== 'string') {
     return next();
@@ -76,12 +106,18 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
   }
 
   const userId = res.locals.authenticatedUser?.id;
-  const requestHash = calculateRequestHash(userId, req.body, req.method, req.path);
+  const requestHash = calculateRequestHash(userId, req.body, req.method, req.path, bodyExcludingKeys);
 
   try {
+    if (config?.cleanExpiredTTL ?? true) {
+      await db.query(
+        'DELETE FROM idempotency_store WHERE expires_at < NOW()::timestamp',
+        []
+      );
+    }
     // Delete expired keys first to keep DB clean and release keys
     await db.query(
-      'DELETE FROM idempotency_store WHERE expires_at < NOW()::timestamp OR expires_at < $1',
+      'DELETE FROM idempotency_store WHERE expires_at < $1',
       [new Date().toISOString()]
     );
 
@@ -148,8 +184,7 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
       }
     }
 
-    // Insert 'started' record
-    const retentionSeconds = config.idempotency.retentionWindowSeconds;
+    const retentionSeconds = opts?.retentionSeconds ?? config.idempotency.retentionWindowSeconds;
     const expiresAtDate = new Date(Date.now() + retentionSeconds * 1000);
 
     await db.query(
