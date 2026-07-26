@@ -98,6 +98,9 @@ export const envSchema = z
     LOGIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(5),
     LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000), // 1 minute sliding window
 
+    FEATURE_FLAGS_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(30),
+    FEATURE_FLAGS_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+
     // CORS
     CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
 
