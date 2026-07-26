@@ -14,6 +14,7 @@ import { createWebhookAccessLogMiddleware } from '../middleware/webhookAccessLog
 import { config } from '../config/index.js';
 import { logger } from '../logger.js';
 import { validateRetryPolicy } from '../services/webhookRetry.js';
+import { createWebhookHealthRouter } from '../routes/webhooks/health.js';
 
 const router = Router();
 
@@ -33,6 +34,11 @@ router.use(webhookAccessLog);
  * back to the global REST rate-limit settings.
  */
 const webhookMgmtRateLimit = createRestRateLimitMiddleware(config.webhookRateLimit);
+
+// Mount the webhook subsystem health probe at /health.
+// This must be registered BEFORE the parameterised /:developerId routes so
+// the literal path segment "health" is not captured as a developerId.
+router.use('/health', createWebhookHealthRouter());
 
 const VALID_EVENTS: WebhookEventType[] = [
   'new_api_call',
