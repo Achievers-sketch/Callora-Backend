@@ -13,14 +13,7 @@ import {
   approveQuotaRequest,
   rejectQuotaRequest,
 } from '../services/quotaService.js';
-import { validate } from '../middleware/validate.js';
-import {
-  usersQuerySchema,
-  developerIdParamsSchema,
-  quotaRequestsQuerySchema,
-  quotaRequestIdParamsSchema,
-  quotaRequestActionBodySchema,
-} from '../validators/admin.js';
+import { createAdminQuotaBulkRouter } from './admin/quotas/bulk.js';
 import { createAdminWebhooksRouter } from './admin/webhooks.js';
 import { createAdminApisRouter } from './admin/apis.js';
 import { createAdminHealthProbesRouter } from './admin/health/probes.js';
@@ -38,20 +31,7 @@ const router = Router();
 router.use(createAdminIpAllowlist());
 router.use(adminAuth);
 router.use(adminLogMiddleware);
-
-// ---------------------------------------------------------------------------
-// User management
-// ---------------------------------------------------------------------------
-
-/**
- * GET /api/admin/users
- *
- * Returns a paginated list of all registered users.
- * Accepts optional `limit` (positive integer) and `offset` (non-negative
- * integer) query parameters.  Invalid values are rejected with HTTP 400
- * before the database is touched.
- */
-router.get('/users', validate({ query: usersQuerySchema }), async (req, res, next) => {
+router.get('/users', async (req, res, next) => {
   try {
     const { limit, offset } = parsePagination(req.query as Record<string, string>);
     const { users, total } = await findUsers({ limit, offset });
@@ -273,6 +253,8 @@ router.post(
     }
   },
 );
+
+router.use('/quota/requests', createAdminQuotaBulkRouter());
 
 // ---------------------------------------------------------------------------
 // Webhook signing-key rotation + delivery monitoring
