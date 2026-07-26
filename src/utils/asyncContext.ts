@@ -28,18 +28,6 @@ export const getCorrelationId = (): string | undefined =>
   requestContextStorage.getStore()?.correlationId;
 
 /**
- * Set the correlation id on the active async context store.
- * Called by the correlation middleware after the request context has been
- * established by requestIdMiddleware.
- */
-export const setCorrelationId = (id: string): void => {
-  const store = requestContextStorage.getStore();
-  if (store) {
-    store.correlationId = id;
-  }
-};
-
-/**
  * Return the active request id, or create a local fallback for work that runs
  * outside an inbound HTTP request such as jobs and isolated unit tests.
  */

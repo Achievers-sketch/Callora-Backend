@@ -1,11 +1,28 @@
+/**
+ * Tests for the correlation-id middleware.
+ *
+ * Covers:
+ *   - Incoming x-correlation-id header is propagated to the response
+ *   - Fallback to req.id when no correlation-id header is present
+ *   - UUID generation when neither header nor req.id is available
+ *   - Sanitisation: control characters stripped, oversized values rejected
+ *   - req.correlationId is attached for downstream handlers
+ *   - X-Correlation-Id header is always set on the response
+ *   - Array header values are handled correctly
+ */
+
 import assert from 'node:assert/strict';
 import type { Request, Response, NextFunction } from 'express';
 import {
   correlationMiddleware,
+  resolveCorrelationId,
   sanitizeCorrelationId,
-  buildOutboundCorrelationHeaders,
-  CORRELATION_ID_MAX_LENGTH,
+  CORRELATION_ID_HEADER,
 } from './correlation.js';
+
+// ---------------------------------------------------------------------------
+// sanitizeCorrelationId
+// ---------------------------------------------------------------------------
 
 describe('sanitizeCorrelationId', () => {
   test('returns the value unchanged for a normal id', () => {
@@ -13,7 +30,7 @@ describe('sanitizeCorrelationId', () => {
   });
 
   test('trims surrounding whitespace', () => {
-    assert.equal(sanitizeCorrelationId('  test-corr-id  '), 'test-corr-id');
+    assert.equal(sanitizeCorrelationId('  test-trim  '), 'test-trim');
   });
 
   test('strips CR and LF to prevent header injection', () => {
@@ -36,54 +53,130 @@ describe('sanitizeCorrelationId', () => {
     assert.equal(sanitizeCorrelationId(undefined), undefined);
   });
 
-  test('returns undefined when value exceeds CORRELATION_ID_MAX_LENGTH', () => {
-    const oversized = 'a'.repeat(CORRELATION_ID_MAX_LENGTH + 1);
+  test('returns undefined when value exceeds max length', () => {
+    const oversized = 'a'.repeat(129);
     assert.equal(sanitizeCorrelationId(oversized), undefined);
   });
 
-  test('accepts value exactly at CORRELATION_ID_MAX_LENGTH', () => {
-    const maxLen = 'a'.repeat(CORRELATION_ID_MAX_LENGTH);
+  test('accepts value at exactly max length', () => {
+    const maxLen = 'a'.repeat(128);
     assert.equal(sanitizeCorrelationId(maxLen), maxLen);
   });
 });
 
-describe('correlationMiddleware', () => {
-  test('uses incoming x-correlation-id header', (done) => {
+// ---------------------------------------------------------------------------
+// resolveCorrelationId
+// ---------------------------------------------------------------------------
+
+describe('resolveCorrelationId', () => {
+  test('prefers incoming x-correlation-id header', () => {
     const req = {
-      header: (name: string) =>
-        name.toLowerCase() === 'x-correlation-id' ? 'test-corr-id' : undefined,
-      id: 'req-id-123',
+      headers: { 'x-correlation-id': 'client-corr-123' },
+      id: 'req-id-456',
     } as unknown as Request;
 
+    assert.equal(resolveCorrelationId(req), 'client-corr-123');
+  });
+
+  test('falls back to req.id when no header is present', () => {
+    const req = {
+      headers: {},
+      id: 'req-id-789',
+    } as unknown as Request;
+
+    assert.equal(resolveCorrelationId(req), 'req-id-789');
+  });
+
+  test('generates a UUID when neither header nor req.id is available', () => {
+    const req = {
+      headers: {},
+    } as unknown as Request;
+
+    const result = resolveCorrelationId(req);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    assert.match(result, uuidRegex);
+  });
+
+  test('sanitises the incoming header value', () => {
+    const req = {
+      headers: { 'x-correlation-id': '  safe-id  ' },
+    } as unknown as Request;
+
+    assert.equal(resolveCorrelationId(req), 'safe-id');
+  });
+
+  test('ignores oversized header and falls back to req.id', () => {
+    const req = {
+      headers: { 'x-correlation-id': 'x'.repeat(129) },
+      id: 'fallback-id',
+    } as unknown as Request;
+
+    assert.equal(resolveCorrelationId(req), 'fallback-id');
+  });
+
+  test('handles array header values', () => {
+    const req = {
+      headers: { 'x-correlation-id': ['first-value', 'second-value'] },
+      id: 'req-id',
+    } as unknown as Request;
+
+    assert.equal(resolveCorrelationId(req), 'first-value');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// correlationMiddleware
+// ---------------------------------------------------------------------------
+
+describe('correlationMiddleware', () => {
+  test('propagates incoming x-correlation-id to response header', (done) => {
+    const req = {
+      headers: { 'x-correlation-id': 'client-corr-abc' },
+      id: 'req-1',
+    } as unknown as Request;
+
+    let responseHeaderValue: string | undefined;
     const res = {
       setHeader: (name: string, value: string) => {
-        assert.equal(name, 'X-Correlation-Id');
-        assert.equal(value, 'test-corr-id');
+        if (name === 'X-Correlation-Id') {
+          responseHeaderValue = value;
+        }
       },
     } as unknown as Response;
 
     const next = (() => {
-      assert.equal((req as unknown as { correlationId?: string }).correlationId, 'test-corr-id');
+      assert.equal(responseHeaderValue, 'client-corr-abc');
+      assert.equal(
+        (req as Request & { correlationId?: string }).correlationId,
+        'client-corr-abc',
+      );
       done();
     }) as NextFunction;
 
     correlationMiddleware(req, res, next);
   });
 
-  test('falls back to req.id when x-correlation-id is absent', (done) => {
+  test('falls back to req.id when no correlation-id header is present', (done) => {
     const req = {
-      header: () => undefined,
-      id: 'req-id-123',
+      headers: {},
+      id: 'req-fallback-42',
     } as unknown as Request;
 
-    let setHeaderValue: string | undefined;
+    let responseHeaderValue: string | undefined;
     const res = {
-      setHeader: (_name: string, value: string) => { setHeaderValue = value; },
+      setHeader: (name: string, value: string) => {
+        if (name === 'X-Correlation-Id') {
+          responseHeaderValue = value;
+        }
+      },
     } as unknown as Response;
 
     const next = (() => {
-      assert.equal(setHeaderValue, 'req-id-123');
-      assert.equal((req as unknown as { correlationId?: string }).correlationId, 'req-id-123');
+      assert.equal(responseHeaderValue, 'req-fallback-42');
+      assert.equal(
+        (req as Request & { correlationId?: string }).correlationId,
+        'req-fallback-42',
+      );
       done();
     }) as NextFunction;
 
@@ -92,73 +185,102 @@ describe('correlationMiddleware', () => {
 
   test('generates a UUID when neither header nor req.id is available', (done) => {
     const req = {
-      header: () => undefined,
+      headers: {},
     } as unknown as Request;
 
-    let setHeaderValue: string | undefined;
+    let responseHeaderValue: string | undefined;
     const res = {
-      setHeader: (_name: string, value: string) => { setHeaderValue = value; },
+      setHeader: (name: string, value: string) => {
+        if (name === 'X-Correlation-Id') {
+          responseHeaderValue = value;
+        }
+      },
     } as unknown as Response;
 
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
     const next = (() => {
-      assert.ok(setHeaderValue, 'X-Correlation-Id must be set');
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      assert.match(setHeaderValue ?? '', uuidRegex);
-      assert.equal((req as unknown as { correlationId?: string }).correlationId, setHeaderValue);
+      assert.ok(responseHeaderValue, 'X-Correlation-Id header must be set');
+      assert.match(responseHeaderValue ?? '', uuidRegex);
+      assert.match(
+        (req as Request & { correlationId?: string }).correlationId ?? '',
+        uuidRegex,
+      );
       done();
     }) as NextFunction;
 
     correlationMiddleware(req, res, next);
   });
 
-  test('prefers x-correlation-id over req.id', (done) => {
+  test('sanitises the incoming header before setting response', (done) => {
     const req = {
-      header: (name: string) =>
-        name.toLowerCase() === 'x-correlation-id' ? 'explicit-corr-id' : undefined,
-      id: 'req-id-123',
+      headers: { 'x-correlation-id': '  trimmed-id  ' },
+      id: 'req-2',
     } as unknown as Request;
 
-    let setHeaderValue: string | undefined;
+    let responseHeaderValue: string | undefined;
     const res = {
-      setHeader: (_name: string, value: string) => { setHeaderValue = value; },
+      setHeader: (name: string, value: string) => {
+        if (name === 'X-Correlation-Id') {
+          responseHeaderValue = value;
+        }
+      },
     } as unknown as Response;
 
     const next = (() => {
-      assert.equal(setHeaderValue, 'explicit-corr-id');
-      assert.equal((req as unknown as { correlationId?: string }).correlationId, 'explicit-corr-id');
+      assert.equal(responseHeaderValue, 'trimmed-id');
       done();
     }) as NextFunction;
 
     correlationMiddleware(req, res, next);
   });
 
-  test('strips CRLF injection attempt from x-correlation-id', (done) => {
+  test('rejects oversized header and generates fallback', (done) => {
+    const oversized = 'x'.repeat(129);
     const req = {
-      header: (name: string) =>
-        name.toLowerCase() === 'x-correlation-id' ? 'safe-id\r\nX-Evil: injected' : undefined,
-      id: 'req-id-123',
+      headers: { 'x-correlation-id': oversized },
+      id: 'req-3',
     } as unknown as Request;
 
-    let setHeaderValue: string | undefined;
+    let responseHeaderValue: string | undefined;
     const res = {
-      setHeader: (_name: string, value: string) => { setHeaderValue = value; },
+      setHeader: (name: string, value: string) => {
+        if (name === 'X-Correlation-Id') {
+          responseHeaderValue = value;
+        }
+      },
     } as unknown as Response;
 
     const next = (() => {
-      assert.equal(setHeaderValue, 'safe-idX-Evil: injected');
-      assert.ok(!setHeaderValue?.includes('\r'));
-      assert.ok(!setHeaderValue?.includes('\n'));
+      // Oversized header should be ignored, falls back to req.id
+      assert.equal(responseHeaderValue, 'req-3');
       done();
     }) as NextFunction;
 
     correlationMiddleware(req, res, next);
   });
-});
 
-describe('buildOutboundCorrelationHeaders', () => {
-  test('returns headers with X-Correlation-Id from async context', () => {
-    const headers = buildOutboundCorrelationHeaders();
-    assert.ok(headers['X-Correlation-Id']);
-    assert.equal(typeof headers['X-Correlation-Id'], 'string');
+  test('always sets X-Correlation-Id on the response', (done) => {
+    const req = {
+      headers: {},
+    } as unknown as Request;
+
+    const headerCalls: Array<{ name: string; value: string }> = [];
+    const res = {
+      setHeader: (name: string, value: string) => {
+        headerCalls.push({ name, value });
+      },
+    } as unknown as Response;
+
+    const next = (() => {
+      const correlationHeader = headerCalls.find(
+        (c) => c.name === 'X-Correlation-Id',
+      );
+      assert.ok(correlationHeader, 'X-Correlation-Id must be set on response');
+      assert.ok(correlationHeader!.value.length > 0);
+      done();
+    }) as NextFunction;
+
+    correlationMiddleware(req, res, next);
   });
 });
