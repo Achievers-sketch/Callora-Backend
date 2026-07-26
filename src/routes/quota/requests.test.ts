@@ -19,6 +19,7 @@
 import request from 'supertest';
 import express from 'express';
 import quotaRequestsRouter from './requests.js';
+import quotaCountsRouter from './counts.js';
 import { errorHandler } from '../../middleware/errorHandler.js';
 import { requestIdMiddleware } from '../../middleware/requestId.js';
 import {
@@ -39,6 +40,7 @@ function createTestApp() {
   app.use(express.json());
   app.use(requestIdMiddleware);
   app.use('/api/quota/requests', quotaRequestsRouter);
+  app.use('/api/quotas/counts', quotaCountsRouter);
   app.use(errorHandler);
   return app;
 }
@@ -647,6 +649,41 @@ describe('GET /api/quota/requests/:id', () => {
 // ---------------------------------------------------------------------------
 // Tracing span tests
 // ---------------------------------------------------------------------------
+
+describe('GET /api/quotas/counts', () => {
+  beforeEach(() => {
+    setQuotaRequestStore(new InMemoryQuotaRequestStore());
+  });
+
+  it('returns a summary of the caller requests by status', async () => {
+    const app = createTestApp();
+
+    await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .send(validBody);
+
+    const approved = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .send({ requested_tier: 'enterprise', reason: 'Second request for enterprise tier upgrade' });
+
+    const store = getQuotaRequestStore();
+    await store.update(approved.body.data.id, { status: 'approved' });
+
+    await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-2')
+      .send({ requested_tier: 'pro', reason: 'Other developer request' });
+
+    const res = await request(app)
+      .get('/api/quotas/counts')
+      .set('x-user-id', 'dev-1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ total: 2, pending: 1, approved: 1, rejected: 0 });
+  });
+});
 
 describe('Tracing spans for /api/quota/requests', () => {
   let getSpans: () => RecordedSpan[];
