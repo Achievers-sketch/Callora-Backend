@@ -1,21 +1,15 @@
 /**
- * Admin audit-log listing with cursor pagination.
+ * Admin audit-log listing with cursor pagination and action replay.
  *
- * Route:
- *   GET /api/admin/audit
+ * Routes:
+ *   GET  /api/admin/audit
+ *   POST /api/admin/audit/replay
  *
  * Pagination uses stable keyset ordering over (created_at DESC, id DESC).
  * The opaque `cursor` query param encodes the last row's timestamp and id.
  *
- * Caching
- * -------
- * The route emits a strong ETag derived from the SHA-256 digest of the
- * serialised JSON body.  Repeat requests that supply a matching
- * `If-None-Match` header receive a `304 Not Modified` response with an empty
- * body, saving bandwidth for admin dashboards that poll this endpoint.
- *
- * The ETag changes whenever any field in the response changes (filters,
- * cursor, count, or the entries themselves), so stale data is never served.
+ * Replay re-executes a previously logged admin action using the original
+ * parameters stored in the audit row's `details` JSON blob.
  */
 
 import { Router } from 'express';
@@ -35,11 +29,39 @@ import {
   PgAuditLogRepository,
   type AuditLogRepository,
 } from '../../repositories/auditLogRepository.js';
-import { auditQuerySchema } from '../../validators/audit.js';
+import {
+  createAdminAuditReplayRouter,
+  type AdminAuditReplayRouterDeps,
+} from './audit/replay.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 
-export interface AdminAuditRouterDeps {
+const parseOptionalDate = (value: unknown, field: string): Date | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new BadRequestError(`Invalid "${field}" date`);
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestError(`Invalid "${field}" date`);
+  }
+
+  return date;
+};
+
+const parseOptionalString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+};
+
+export interface AdminAuditRouterDeps
+  extends AdminAuditReplayRouterDeps {
   auditLogRepository?: AuditLogRepository;
 }
 
@@ -47,16 +69,9 @@ export function createAdminAuditRouter(deps: AdminAuditRouterDeps = {}): Router 
   const router = Router();
   const auditLogRepository = deps.auditLogRepository ?? new PgAuditLogRepository();
 
-  /**
-   * GET /api/admin/audit
-   *
-   * Returns a cursor-paginated list of audit-log entries.
-   *
-   * Supports `If-None-Match` conditional requests: when the response body has
-   * not changed since the last fetch, the middleware returns `304 Not Modified`
-   * with no body, cutting bandwidth on repeat polls.
-   */
-  router.get('/', etagMiddleware, async (req, res, next) => {
+  router.use('/replay', createAdminAuditReplayRouter(deps));
+
+  router.get('/', async (req, res, next) => {
     try {
       const parsedQuery = auditQuerySchema.safeParse(req.query);
 

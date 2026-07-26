@@ -21,7 +21,7 @@ import { createAdminCreditGrantsRouter } from './admin/billing/credits/grant.js'
 import { createAdminQuotaBulkRouter } from './admin/quotas/bulk.js';
 import { createAdminUsageExportRouter } from './admin/usage/export.js';
 import { createAdminKeyConcurrencyRouter } from './admin/keys/concurrency.js';
-import { createMaintenanceBannerRouter } from './admin/maintenance/banner.js';
+import { createAdminAuditRouter } from './admin/audit.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 const usageStore: UsageAdminStore = createUsageStore();
@@ -299,13 +299,11 @@ router.use('/quotas', createAdminQuotaBulkRouter());
 router.use('/keys', createAdminKeyConcurrencyRouter());
 
 // ---------------------------------------------------------------------------
-// Circuit breaker management
-// Mounts: GET    /api/admin/circuit-breakers
-//         GET    /api/admin/circuit-breakers/:breakerKey
-//         POST   /api/admin/circuit-breakers/:breakerKey/reset
-//         POST   /api/admin/circuit-breakers/:breakerKey/trip
+// Audit log listing and action replay
+// Mounts: GET  /api/admin/audit
+//         POST /api/admin/audit/replay
 // ---------------------------------------------------------------------------
-router.use('/circuit-breakers', createAdminCircuitBreakerRouter());
+router.use('/audit', createAdminAuditRouter());
 
 // ---------------------------------------------------------------------------
 // Maintenance banner
