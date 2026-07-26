@@ -16,6 +16,7 @@ import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { requireAuth, type AuthenticatedLocals } from '../../middleware/requireAuth.js';
 import { bodyValidator } from '../../middleware/validate.js';
+import { correlationMiddleware } from '../../middleware/correlation.js';
 import { quotaRequestSchema } from '../../validators/quotaRequest.js';
 import {
   createQuotaRequest,
@@ -27,6 +28,9 @@ import { NotFoundError, UnauthorizedError } from '../../errors/index.js';
 import { withSpan } from '../../otel/spans.js';
 
 const router = Router();
+
+// Correlation-id middleware runs on every quota route
+router.use(correlationMiddleware);
 
 /**
  * POST /api/quota/requests
@@ -61,13 +65,16 @@ router.post(
             : undefined,
         });
 
+        const correlationId = (req as Request & { correlationId?: string }).correlationId;
+
         logger.info('Quota request created via self-service', {
           quotaRequestId: request.id,
           developerId: user.id,
           requestedTier: request.requestedTier,
+          correlationId,
         });
 
-        res.status(201).json({ data: request });
+        res.status(201).json({ data: request, correlationId });
       });
     } catch (err) {
       next(err);
@@ -94,6 +101,8 @@ router.get(
           throw new UnauthorizedError();
         }
 
+        const correlationId = (req as Request & { correlationId?: string }).correlationId;
+
         // Optional status filter — validate the enum value at the boundary
         const statusParam =
           typeof req.query.status === 'string' ? req.query.status : undefined;
@@ -105,6 +114,7 @@ router.get(
             code: 'VALIDATION_ERROR',
             message: 'status must be one of: pending, approved, rejected',
             requestId: req.id ?? 'unknown',
+            correlationId,
           });
           return;
         }
@@ -124,9 +134,10 @@ router.get(
           developerId: user.id,
           count: ownRequests.length,
           statusFilter: statusParam,
+          correlationId,
         });
 
-        res.json({ data: ownRequests });
+        res.json({ data: ownRequests, correlationId });
       });
     } catch (err) {
       next(err);
@@ -155,6 +166,8 @@ router.get(
           throw new UnauthorizedError();
         }
 
+        const correlationId = (req as Request & { correlationId?: string }).correlationId;
+
         const request = await getQuotaRequest(req.params.id);
 
         // Ownership guard: treat another developer's request as 404 to avoid
@@ -166,9 +179,10 @@ router.get(
         logger.info('Quota request fetched', {
           quotaRequestId: request.id,
           developerId: user.id,
+          correlationId,
         });
 
-        res.json({ data: request });
+        res.json({ data: request, correlationId });
       });
     } catch (err) {
       next(err);
