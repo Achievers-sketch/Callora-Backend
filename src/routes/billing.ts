@@ -17,6 +17,7 @@ import {
 } from "../middleware/requireAuth.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import { billingDeductHistogramMiddleware } from "../middleware/metricsHistogram.js";
+import { createCorsAllowlistMiddleware } from "../middleware/cors.js";
 import {
   BillingService,
   type BillingDeductResult,
@@ -29,10 +30,14 @@ import { redactSimulationDetails } from "../lib/simulationDiagnostics.js";
 import { billingAccessLogMiddleware } from "../middleware/billingAccessLog.js";
 import creditsRouter from "./billing/credits.js";
 import disputesRouter from "./billing/disputes.js";
+import bulkDeductRouter from "./billing/deduct/bulk.js";
 import { createFeeAbstractionRouter } from "./billing/feeAbstraction.js";
 import bulkDeductRouter from "./billing/deduct/bulk.js";
 
 const router = Router();
+
+// Route-specific CORS allowlist enforcement — deny by default, preflight cached.
+router.use(createCorsAllowlistMiddleware());
 
 router.use(billingAccessLogMiddleware);
 
