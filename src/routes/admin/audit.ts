@@ -23,11 +23,9 @@ import { getClientIp } from '../../lib/clientIp.js';
 import { encodeCursor, parseCursor } from '../../lib/cursorPagination.js';
 import {
   cursorPaginatedResponse,
-  parseCursorPagination,
 } from '../../lib/pagination.js';
 import {
   AppError,
-  BadRequestError,
   InternalServerError,
 } from '../../errors/index.js';
 import { ValidationError } from '../../middleware/validate.js';
@@ -37,32 +35,9 @@ import {
   PgAuditLogRepository,
   type AuditLogRepository,
 } from '../../repositories/auditLogRepository.js';
+import { auditQuerySchema } from '../../validators/audit.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
-
-const parseOptionalDate = (value: unknown, field: string): Date | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new BadRequestError(`Invalid "${field}" date`);
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    throw new BadRequestError(`Invalid "${field}" date`);
-  }
-
-  return date;
-};
-
-const parseOptionalString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
-};
 
 export interface AdminAuditRouterDeps {
   auditLogRepository?: AuditLogRepository;
@@ -83,9 +58,21 @@ export function createAdminAuditRouter(deps: AdminAuditRouterDeps = {}): Router 
    */
   router.get('/', etagMiddleware, async (req, res, next) => {
     try {
-      const { limit, cursor: rawCursor } = parseCursorPagination(
-        req.query as Record<string, string>,
-      );
+      const parsedQuery = auditQuerySchema.safeParse(req.query);
+
+      if (!parsedQuery.success) {
+        const details = parsedQuery.error.issues.map((issue) => {
+          const field = `query.${issue.path.join('.')}`;
+          return {
+            field,
+            message: issue.message,
+            code: issue.code.toUpperCase(),
+          };
+        });
+        throw new ValidationError(details);
+      }
+
+      const { limit, cursor: rawCursor, event, tenant_id: tenantId, actor, from, to } = parsedQuery.data;
 
       let afterCursor;
       if (rawCursor !== undefined) {
@@ -99,16 +86,6 @@ export function createAdminAuditRouter(deps: AdminAuditRouterDeps = {}): Router 
             },
           ]);
         }
-      }
-
-      const event = parseOptionalString(req.query.event);
-      const tenantId = parseOptionalString(req.query.tenant_id);
-      const actor = parseOptionalString(req.query.actor);
-      const from = parseOptionalDate(req.query.from, 'from');
-      const to = parseOptionalDate(req.query.to, 'to');
-
-      if (from && to && from.getTime() > to.getTime()) {
-        throw new BadRequestError('"from" must be before or equal to "to"');
       }
 
       const { entries, hasMore } = await auditLogRepository.findCursor({
