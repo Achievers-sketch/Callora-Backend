@@ -189,6 +189,15 @@ export const ErrorCode = {
   /** Webhook signature verification failed */
   INVALID_WEBHOOK_SIGNATURE: "INVALID_WEBHOOK_SIGNATURE",
 
+  /** The delivery ID provided for webhook replay is missing or invalid */
+  INVALID_DELIVERY_ID: "INVALID_DELIVERY_ID",
+
+  /** The retry policy provided is invalid */
+  INVALID_RETRY_POLICY: "INVALID_RETRY_POLICY",
+
+  /** No Dead-Letter Queue entry was found for the given delivery ID */
+  DLQ_ENTRY_NOT_FOUND: "DLQ_ENTRY_NOT_FOUND",
+
   /** IP address format is invalid */
   INVALID_IP_FORMAT: "INVALID_IP_FORMAT",
 
@@ -253,7 +262,16 @@ export const ErrorCode = {
   INVALID_EXPORT_SCHEDULE: "INVALID_EXPORT_SCHEDULE",
 
   /** Export schedule not found */
-  EXPORT_SCHEDULE_NOT_FOUND: "EXPORT_SCHEDULE_NOT_FOUND"
+  EXPORT_SCHEDULE_NOT_FOUND: "EXPORT_SCHEDULE_NOT_FOUND",
+
+  /** Required authentication fields are missing from the request */
+  MISSING_AUTH_FIELDS: "MISSING_AUTH_FIELDS",
+
+  /** The authentication method is not yet implemented */
+  AUTH_NOT_IMPLEMENTED: "AUTH_NOT_IMPLEMENTED",
+
+  /** A required system component is not configured */
+  COMPONENT_NOT_CONFIGURED: "COMPONENT_NOT_CONFIGURED"
 
 } as const;
 

@@ -81,8 +81,8 @@ export function etagMiddleware(req: Request, res: Response, next: NextFunction):
 
   const originalJson = res.json.bind(res);
 
-  res.json = function (body?: unknown): Response {
-    // Only attach ETags to successful 200 responses that don't already have one
+  res.send = function (body?: unknown): Response {
+    // Only generate ETag for 200 OK responses where ETag is not already set
     if (res.statusCode !== 200 || res.get('ETag')) {
       return originalJson(body);
     }

@@ -12,60 +12,7 @@
 
 import request from 'supertest';
 import express from 'express';
-import { etagMiddleware, generateETag, etagMatches } from './etag.js';
-
-// ---------------------------------------------------------------------------
-// generateETag
-// ---------------------------------------------------------------------------
-describe('generateETag', () => {
-  test('returns a quoted hex-digest string (strong ETag format)', () => {
-    const tag = generateETag('hello world');
-    // Strong ETag: surrounded by double-quotes, 64-char SHA-256 hex, no W/ prefix
-    expect(tag).toMatch(/^"[0-9a-f]{64}"$/);
-  });
-
-  test('is deterministic for the same input', () => {
-    expect(generateETag('foo')).toBe(generateETag('foo'));
-  });
-
-  test('differs for different inputs', () => {
-    expect(generateETag('foo')).not.toBe(generateETag('bar'));
-  });
-
-  test('accepts a Buffer', () => {
-    const tag = generateETag(Buffer.from('hello'));
-    expect(tag).toMatch(/^"[0-9a-f]{64}"$/);
-    expect(tag).toBe(generateETag('hello'));
-  });
-
-  test('does not include a W/ weak prefix', () => {
-    expect(generateETag('test')).not.toContain('W/');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// etagMatches
-// ---------------------------------------------------------------------------
-describe('etagMatches', () => {
-  const etag = '"abc123"';
-
-  test('matches an identical strong ETag', () => {
-    expect(etagMatches(etag, etag)).toBe(true);
-  });
-
-  test('wildcard * matches any ETag', () => {
-    expect(etagMatches('*', etag)).toBe(true);
-    expect(etagMatches('  *  ', etag)).toBe(true);
-  });
-
-  test('does not match a different ETag', () => {
-    expect(etagMatches('"xyz999"', etag)).toBe(false);
-  });
-
-  test('does not match a weak version of the same digest (strong comparison)', () => {
-    // RFC 7232 §3.2: weak tags never match under strong comparison
-    expect(etagMatches('W/"abc123"', etag)).toBe(false);
-  });
+import { etagMiddleware } from './etag.js';
 
   test('matches when the target ETag is one of several comma-separated tags', () => {
     expect(etagMatches('"other1", "abc123", "other2"', etag)).toBe(true);

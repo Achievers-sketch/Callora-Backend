@@ -13,6 +13,45 @@ Requires `FEE_BUMPER_SECRET_KEY` environment variable (Stellar secret key `S...`
 
 See [docs/fee-abstraction.md](./docs/fee-abstraction.md) for full API reference, security considerations, rate limits, and emitted events.
 
+## Subscription Endpoints
+
+Authenticated users can subscribe to marketplace APIs with optional metering preferences.
+
+- `POST /api/subscriptions` — subscribe to an API (`api_id` required; optional `metering_limit` as max calls/month)
+- `GET /api/subscriptions` — list subscriptions for the authenticated user; filter by `?status=active|paused|cancelled`
+- `GET /api/subscriptions/:id` — get a single subscription (must belong to the authenticated user)
+- `PATCH /api/subscriptions/:id` — update `status` (`active`/`paused`) or `metering_limit`; body must include at least one field
+- `DELETE /api/subscriptions/:id` — cancel a subscription (soft-delete; sets status to `cancelled`)
+
+Business rules:
+- A user cannot subscribe to their own API (returns `403`).
+- Only one non-cancelled subscription is allowed per user/API pair (returns `409` on conflict).
+- Soft-deleted (deleted) APIs cannot be subscribed to (returns `404`).
+- Cancelled subscriptions cannot be modified or re-cancelled (returns `400`).
+
+The migration is in `migrations/0018_subscriptions.sql`.
+
+## Dispute Resolution Endpoints
+
+Developers can open and track disputes against failed or incorrect billing deductions. Admins review and resolve disputes.
+
+**Developer routes** (`requireAuth`):
+
+- `POST /api/billing/disputes` — open a new dispute (`usage_event_id` and `reason` required); returns `201` with the new dispute object. Returns `409` if a dispute for that `usage_event_id` already exists.
+- `GET /api/billing/disputes` — list all disputes opened by the authenticated developer.
+- `GET /api/billing/disputes/:id` — get a single dispute plus its full audit-event trail. Returns `403` if the dispute belongs to another developer, `404` if not found.
+
+**Admin routes** (`adminAuth`):
+
+- `GET /api/billing/disputes/admin/all` — list every dispute across all developers.
+- `POST /api/billing/disputes/:id/resolve` — resolve a dispute. Body: `{ "resolution": "REFUNDED" | "UPHELD", "notes"?: string }`. Returns `404` for unknown disputes, `409` if already resolved.
+
+**State machine**: `OPEN → REFUNDED` (admin grants refund) or `OPEN → UPHELD` (admin upholds the charge).
+
+Every state transition is appended to the `dispute_events` audit trail, which is returned alongside the dispute on `GET /api/billing/disputes/:id`.
+
+The migration is in `migrations/0019_disputes.sql` (rollback: `migrations/0019_disputes.down.sql`).
+
 ## Developer Profile Endpoints
 
 - `GET /api/developers/me` returns the authenticated developer profile and auto-creates a blank profile row on first access.
@@ -35,9 +74,14 @@ See [docs/fee-abstraction.md](./docs/fee-abstraction.md) for full API reference,
   - `GET /api/apis/:id`
   - `POST /api/apis` for authenticated developers to register an API with priced endpoints
 - Usage route: `GET /api/usage`
+- Top-N endpoints per developer: `GET /api/usage/by-endpoint` — returns the authenticated developer's most-called endpoints ranked by call volume, filterable by `from`/`to`/`apiId`/`limit` (see [docs/usage-by-endpoint.md](./docs/usage-by-endpoint.md))
 - Live usage stream: `GET /api/usage/sse` for authenticated developer dashboards
 - Admin usage anomalies: `GET /api/admin/usage/anomalies` returns per-API daily usage anomalies (z-score spikes/drops) for admin review, filterable by `from`/`to`/`apiId`/`threshold`/`limit` (admin auth + IP allowlist)
+- Admin usage export: `GET /api/admin/usage/export` streams usage events as CSV or JSON for reporting, with optional `from`/`to`/`developerId`/`apiId`/`format` filters (admin auth + IP allowlist); see [docs/admin-usage-export.md](./docs/admin-usage-export.md)
+- Admin DB explain: `POST /api/admin/db/explain` runs `EXPLAIN (ANALYZE, FORMAT JSON)` on a read-only SQL query and returns the query plan for diagnostic use (admin auth + IP allowlist); see [docs/admin-db-explain.md](./docs/admin-db-explain.md)
 - Usage anomaly detector: background worker emits `usage.anomaly.detected` when per-developer 5-minute traffic exceeds a rolling 12-window baseline by a configurable multiplier (see `docs/usage-anomaly-detector.md`)
+- Settlement reconciliation: nightly worker that reconciles DB settlement status with on-chain Horizon transaction data, detecting discrepancies like missing transactions, stale pending settlements, and false failures (see `docs/settlement-reconciliation-worker.md`)
+- Multi-region read-replica routing: optional round-robin routing of SELECT queries to PostgreSQL read replicas via `REPLICA_URLS`; writes always use the primary; automatic fallback to primary on replica failure (see [docs/replica-routing.md](./docs/replica-routing.md))
 - JSON body parsing plus gateway API key authentication for upstream proxy routes
 - Per-user global REST rate limiting for authenticated `/api/billing`, `/api/usage`, `/api/developers`, `/api/vault`, and `/api/keys` traffic, with IP fallback for unauthenticated requests
 - In-memory `VaultRepository` with:
@@ -168,7 +212,12 @@ When refreshing it:
 
 Run `npm run lint`, `npm run typecheck`, and `npm test` after editing the fixture.
 
-### Observability (Prometheus Metrics)
+### Observability (Prometheus Metrics & Dashboards)
+
+Grafana dashboards are committed under [`docs/dashboards/`](./docs/dashboards/README.md):
+
+- **[Soroban Billing](./docs/dashboards/soroban-billing.json)** — P50/P95 deduction latency, error category breakdown by `SorobanRpcErrorCategory`, and call rate panels. Import via Grafana → Dashboards → Import.
+- **[Billing Deduct HTTP Latency](./docs/grafana-dashboard-billing-deduct.json)** — HTTP-level latency percentiles for `POST /api/billing/deduct`.
 
 The application exposes a standard Prometheus text-format metrics endpoint at `GET /api/metrics`.
 It automatically tracks:
@@ -305,6 +354,7 @@ For request-id validation, AsyncLocalStorage propagation, structured logging, an
 | `DB_POOL_MAX` | No | `10` | Max pool connections |
 | `DB_IDLE_TIMEOUT_MS` | No | `30000` | Pool idle timeout (ms) |
 | `DB_CONN_TIMEOUT_MS` | No | `2000` | Pool connection timeout (ms) |
+| `REPLICA_URLS` | No | — | Comma-separated `postgresql://` read-replica connection strings. When set, SELECT queries are round-robin routed to replicas; writes always use `DATABASE_URL`. Omit or leave blank to use primary-only mode. See [docs/replica-routing.md](./docs/replica-routing.md). |
 | `JWT_SECRET` | **Yes** | — | Secret for signing JWTs |
 | `ADMIN_API_KEY` | **Yes** | — | Key for admin endpoints |
 | `METRICS_API_KEY` | **Yes** | — | Key for `/api/metrics` in production |
@@ -321,6 +371,7 @@ For request-id validation, AsyncLocalStorage propagation, structured logging, an
 | `HORIZON_TIMEOUT` | No | `2000` | Horizon timeout (ms) |
 | `SETTLEMENT_STATUS_SYNC_INTERVAL_MS` | No | `60000` | Settlement-status sync polling interval (ms) |
 | `SETTLEMENT_STATUS_SYNC_TIMEOUT_MS` | No | `5000` | Per-request Horizon timeout for settlement sync (ms) |
+| `SETTLEMENT_RECON_INTERVAL_MS` | No | `86400000` | Nightly settlement reconciliation interval (ms, default 24h) |
 | `HEALTH_CHECK_DB_TIMEOUT` | No | `2000` | DB health check timeout (ms) |
 | `APP_VERSION` | No | `1.0.0` | Reported in health check responses |
 | `LOG_LEVEL` | No | `info` | `trace` / `debug` / `info` / `warn` / `error` / `fatal` |

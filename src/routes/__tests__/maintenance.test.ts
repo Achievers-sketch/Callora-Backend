@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { maintenanceRouter } from '../admin/maintenance';
-import { healthzRouter } from '../../routes/healthz';
+import { maintenanceRouter } from '../admin/maintenance.js';
+import { healthzRouter } from '../healthz.js';
 
 const app = express();
 app.use(express.json());

@@ -15,9 +15,7 @@ import { logger } from "../../../logger.js";
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === "true";
 
-export interface MaintenanceBannerRouterDeps {
-  
-}
+export type MaintenanceBannerRouterDeps = object;
 
 /**
  * Factory that returns the admin maintenance banner sub-router.

@@ -60,6 +60,14 @@ const REDACTABLE_FIELD_LOOKUP = new Map<string, AccessLogField>(
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 
+const getHeaderValue = (headers: Request['headers'], headerName: string): string | undefined => {
+  const value = headers[headerName];
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return typeof value === 'string' ? value : undefined;
+};
+
 const byteLength = (chunk: unknown, encoding?: BufferEncoding): number => {
   if (chunk === null || chunk === undefined) {
     return 0;
@@ -122,13 +130,14 @@ export function createAccessLogMiddleware(options: AccessLogOptions = {}) {
     const requestHeaders = req.headers ?? {};
     const requestId =
       sanitizeRequestId(req.id) ??
-      getRequestId() ??
-      sanitizeRequestId(
-        Array.isArray(requestHeaders['x-request-id'])
-          ? requestHeaders['x-request-id'][0]
-          : requestHeaders['x-request-id'],
-      ) ??
+      sanitizeRequestId(getRequestId()) ??
+      sanitizeRequestId(getHeaderValue(requestHeaders, 'x-request-id')) ??
+      sanitizeRequestId(getHeaderValue(requestHeaders, 'x-correlation-id')) ??
       uuidv4();
+    const correlationId =
+      sanitizeRequestId(getHeaderValue(requestHeaders, 'x-correlation-id')) ??
+      sanitizeRequestId(getHeaderValue(requestHeaders, 'x-request-id')) ??
+      requestId;
 
     if (typeof res.setHeader === 'function') {
       res.setHeader('x-request-id', requestId);
@@ -195,7 +204,7 @@ export function createAccessLogMiddleware(options: AccessLogOptions = {}) {
       const elapsedMs = Number(process.hrtime.bigint() - startAt) / 1_000_000;
       const status = res.statusCode;
       const payload: AccessLogPayload = {
-        correlationId: requestId,
+        correlationId,
         requestId,
         method: req.method,
         path: req.path,

@@ -6,6 +6,103 @@
     "description": "API contract covering Callora backend billing, usage, and developer routes."
   },
   "paths": {
+    "/api/admin/billing/credits/grant": {
+      "post": {
+        "summary": "Grant GrantFox FWC26 prepaid credits",
+        "description": "Adds prepaid USDC credits to a user account for the GrantFox FWC26 campaign. Requires admin authentication and the admin IP allowlist.",
+        "security": [
+          {
+            "adminApiKey": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "user_id",
+                  "amount_usdc"
+                ],
+                "properties": {
+                  "user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "amount_usdc": {
+                    "type": "string",
+                    "pattern": "^\\d+(?:\\.\\d{1,7})?$",
+                    "description": "Positive USDC amount with at most seven fractional digits"
+                  }
+                }
+              },
+              "example": {
+                "user_id": "user_123",
+                "amount_usdc": "25.50"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Credits granted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "user_id",
+                        "amount_usdc",
+                        "balance_usdc",
+                        "campaign",
+                        "updated_at"
+                      ],
+                      "properties": {
+                        "user_id": {
+                          "type": "string"
+                        },
+                        "amount_usdc": {
+                          "type": "string"
+                        },
+                        "balance_usdc": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": "string",
+                          "example": "GrantFox FWC26"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid grant request"
+          },
+          "401": {
+            "description": "Unauthorized admin request"
+          },
+          "403": {
+            "description": "Forbidden by admin IP allowlist"
+          }
+        }
+      }
+    },
     "/api/gateway/health/{apiSlug}": {
       "get": {
         "summary": "Get gateway health for an API",
@@ -70,6 +167,7 @@
                   "summary": "Deduct billing request",
                   "value": {
                     "requestId": "req-123e4567-e89b-12d3-a456-426614174000",
+                    "developerId": "dev-123",
                     "apiId": "api-123",
                     "endpointId": "endpoint-456",
                     "apiKeyId": "key-789",
@@ -188,6 +286,39 @@
                       "requestId": "req-abc123"
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/deduct/bulk": {
+      "post": {
+        "summary": "Deduct billing balance for up to 100 API calls in one batch",
+        "description": "Creates usage events for up to 100 billing entries in a single database transaction, then performs one aggregate on-chain deduction for the newly inserted entries. Existing requestIds are treated idempotently and are returned in the per-entry results without being charged again.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingBulkDeductRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk billing deduction successfully processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingBulkDeductResponse"
                 }
               }
             }
@@ -340,6 +471,170 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/usage/by-endpoint": {
+      "get": {
+        "summary": "Top-N endpoints by call volume",
+        "description": "Returns the authenticated developer's most-called API endpoints ranked by call volume within the requested time window. Useful for identifying hot endpoints and optimising spend. Defaults to the last 30 days and top 5 endpoints when the corresponding query parameters are omitted.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start of period (ISO-8601). Defaults to 30 days ago.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of period (ISO-8601). Defaults to now.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of endpoints to return. Must be a positive integer. Defaults to 5.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5
+            }
+          },
+          {
+            "name": "apiId",
+            "in": "query",
+            "description": "Filter results to a specific API by its ID.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top endpoints returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "period"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "Endpoints ordered by call count descending. Ties are broken by endpoint path ascending.",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "endpoint",
+                          "calls",
+                          "revenue"
+                        ],
+                        "properties": {
+                          "endpoint": {
+                            "type": "string",
+                            "description": "Endpoint path (e.g. `/v1/weather/current`)."
+                          },
+                          "calls": {
+                            "type": "integer",
+                            "description": "Total number of calls to this endpoint in the period."
+                          },
+                          "revenue": {
+                            "type": "string",
+                            "description": "Total revenue generated in smallest USDC units (string to avoid precision loss)."
+                          }
+                        }
+                      }
+                    },
+                    "period": {
+                      "type": "object",
+                      "required": [
+                        "from",
+                        "to"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Effective start of the query period."
+                        },
+                        "to": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Effective end of the query period."
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "endpoint": "/v1/weather/current",
+                      "calls": 142,
+                      "revenue": "142000"
+                    },
+                    {
+                      "endpoint": "/v1/weather/forecast",
+                      "calls": 87,
+                      "revenue": "87000"
+                    }
+                  ],
+                  "period": {
+                    "from": "2026-06-01T00:00:00.000Z",
+                    "to": "2026-07-01T00:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters (bad date format, invalid limit, `from` after `to`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1141,10 +1436,20 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["plugins", "total"],
+                  "required": [
+                    "plugins",
+                    "total"
+                  ],
                   "properties": {
-                    "plugins": { "type": "array", "items": { "$ref": "#/components/schemas/PluginRecord" } },
-                    "total": { "type": "integer" }
+                    "plugins": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PluginRecord"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -1155,12 +1460,18 @@
       "post": {
         "summary": "Register a new plugin",
         "description": "Registers a new community plugin manifest. Requires authentication.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PluginManifest" }
+              "schema": {
+                "$ref": "#/components/schemas/PluginManifest"
+              }
             }
           }
         },
@@ -1169,33 +1480,122 @@
             "description": "Plugin registered",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PluginRecord" }
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
               }
             }
           },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Plugin already registered", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Plugin already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/marketplace/plugins/{id}": {
       "get": {
         "summary": "Get a plugin by ID",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Plugin found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginRecord" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": {
+            "description": "Plugin found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
         "summary": "Remove a plugin from the registry",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "204": { "description": "Plugin removed" },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "204": {
+            "description": "Plugin removed"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -1203,8 +1603,21 @@
       "post": {
         "summary": "Install a plugin",
         "description": "Marks a plugin as installed and fires the install hook. Requires authentication.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Plugin installed",
@@ -1212,17 +1625,29 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["plugin"],
+                  "required": [
+                    "plugin"
+                  ],
                   "properties": {
-                    "plugin": { "$ref": "#/components/schemas/PluginRecord" },
+                    "plugin": {
+                      "$ref": "#/components/schemas/PluginRecord"
+                    },
                     "hook": {
                       "nullable": true,
                       "type": "object",
                       "properties": {
-                        "ok": { "type": "boolean" },
-                        "hook": { "type": "string" },
-                        "pluginId": { "type": "string" },
-                        "sandboxed": { "type": "boolean" }
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "hook": {
+                          "type": "string"
+                        },
+                        "pluginId": {
+                          "type": "string"
+                        },
+                        "sandboxed": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -1230,21 +1655,360 @@
               }
             }
           },
-          "400": { "description": "Bad request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "409": { "description": "Already installed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
         "summary": "Uninstall a plugin",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Plugin uninstalled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginRecord" } } } },
-          "400": { "description": "Not installed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": {
+            "description": "Plugin uninstalled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/disputes": {
+      "post": {
+        "summary": "Open a dispute",
+        "description": "Developer opens a dispute against a billing charge (usage event). One open dispute is allowed per usage_event_id.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenDisputeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Dispute opened successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dispute"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Dispute already exists for this usage_event_id"
+          }
+        }
+      },
+      "get": {
+        "summary": "List own disputes",
+        "description": "Returns all disputes opened by the authenticated developer.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of disputes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "disputes",
+                    "total"
+                  ],
+                  "properties": {
+                    "disputes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Dispute"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/billing/disputes/{id}": {
+      "get": {
+        "summary": "Get own dispute with audit trail",
+        "description": "Returns a single dispute and its full audit event trail. Only the dispute owner may access it.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dispute with events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "dispute",
+                    "events"
+                  ],
+                  "properties": {
+                    "dispute": {
+                      "$ref": "#/components/schemas/Dispute"
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DisputeEvent"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden: dispute belongs to another user"
+          },
+          "404": {
+            "description": "Dispute not found"
+          }
+        }
+      }
+    },
+    "/api/billing/disputes/{id}/resolve": {
+      "post": {
+        "summary": "Resolve a dispute (admin)",
+        "description": "Admin resolves an open dispute as REFUNDED or UPHELD. Requires admin authentication.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDisputeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dispute resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dispute"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Admin authentication required"
+          },
+          "404": {
+            "description": "Dispute not found"
+          },
+          "409": {
+            "description": "Dispute already resolved"
+          }
+        }
+      }
+    },
+    "/api/billing/disputes/admin/all": {
+      "get": {
+        "summary": "List all disputes (admin)",
+        "description": "Admin endpoint to list every dispute in the system.",
+        "tags": [
+          "Billing",
+          "Disputes"
+        ],
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All disputes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "disputes",
+                    "total"
+                  ],
+                  "properties": {
+                    "disputes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Dispute"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Admin authentication required"
+          }
         }
       }
     }
@@ -1263,32 +2027,261 @@
       }
     },
     "schemas": {
+      "Subscription": {
+        "type": "object",
+        "description": "A user's subscription to a marketplace API.",
+        "required": [
+          "id",
+          "user_id",
+          "api_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Subscription UUID"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "ID of the subscribing user"
+          },
+          "api_id": {
+            "type": "integer",
+            "description": "ID of the subscribed API"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "cancelled"
+            ],
+            "description": "Current subscription status"
+          },
+          "metering_limit": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Maximum calls per calendar month; null means unlimited"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cancelled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "QuotaRequest": {
+        "type": "object",
+        "description": "A developer quota increase request and its current resolution state.",
+        "required": [
+          "id",
+          "developerId",
+          "requestedTier",
+          "reason",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique request ID (UUID v4)"
+          },
+          "developerId": {
+            "type": "string",
+            "description": "The developer's user ID (from auth)"
+          },
+          "requestedTier": {
+            "type": "string",
+            "enum": [
+              "free",
+              "pro",
+              "enterprise"
+            ],
+            "description": "Requested plan tier"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1000,
+            "description": "Developer-provided justification"
+          },
+          "requestedOverrides": {
+            "type": "object",
+            "description": "Optional specific limits to override in addition to the tier",
+            "properties": {
+              "monthlyCallLimit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Requested monthly API call cap"
+              },
+              "rateLimitMaxRequests": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Requested per-window rate-limit ceiling"
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "description": "Current resolution state"
+          },
+          "adminNotes": {
+            "type": "string",
+            "description": "Admin-provided notes on the approval or rejection decision"
+          },
+          "resolvedBy": {
+            "type": "string",
+            "description": "Actor ID (admin) who resolved the request"
+          },
+          "resolvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO-8601 timestamp when the request was resolved"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO-8601 timestamp when the request was submitted"
+          }
+        }
+      },
+      "QuotaRequestCreate": {
+        "type": "object",
+        "description": "Payload for submitting a new quota increase request.",
+        "required": [
+          "requested_tier",
+          "reason"
+        ],
+        "properties": {
+          "requested_tier": {
+            "type": "string",
+            "enum": [
+              "free",
+              "pro",
+              "enterprise"
+            ],
+            "description": "Desired plan tier"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1000,
+            "description": "Justification for the upgrade (10–1000 characters)"
+          },
+          "requested_overrides": {
+            "type": "object",
+            "description": "Optional specific limit overrides to request alongside the tier upgrade",
+            "properties": {
+              "monthly_call_limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Requested monthly API call cap"
+              },
+              "rate_limit_max_requests": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Requested per-window rate-limit ceiling"
+              }
+            }
+          }
+        }
+      },
       "PluginManifest": {
         "type": "object",
-        "required": ["id", "name", "version", "hooks"],
+        "required": [
+          "id",
+          "name",
+          "version",
+          "hooks"
+        ],
         "properties": {
-          "id": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
-          "name": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-          "description": { "type": "string", "maxLength": 512 },
-          "author": { "type": "string", "maxLength": 128 },
+          "id": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "author": {
+            "type": "string",
+            "maxLength": 128
+          },
           "hooks": {
             "type": "array",
             "minItems": 1,
-            "items": { "type": "string", "enum": ["before_charge", "after_charge", "on_refund", "on_quota_exceeded"] }
+            "items": {
+              "type": "string",
+              "enum": [
+                "before_charge",
+                "after_charge",
+                "on_refund",
+                "on_quota_exceeded"
+              ]
+            }
           },
-          "source_url": { "type": "string", "format": "uri" }
+          "source_url": {
+            "type": "string",
+            "format": "uri"
+          }
         }
       },
       "PluginRecord": {
         "type": "object",
-        "required": ["manifest", "status", "created_at"],
+        "required": [
+          "manifest",
+          "status",
+          "created_at"
+        ],
         "properties": {
-          "manifest": { "$ref": "#/components/schemas/PluginManifest" },
-          "status": { "type": "string", "enum": ["available", "installed"] },
-          "installed_by": { "type": "string", "nullable": true },
-          "installed_at": { "type": "string", "nullable": true },
-          "created_at": { "type": "string" }
+          "manifest": {
+            "$ref": "#/components/schemas/PluginManifest"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "installed"
+            ]
+          },
+          "installed_by": {
+            "type": "string",
+            "nullable": true
+          },
+          "installed_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          }
         }
       },
       "BillingDeductRequest": {
@@ -1303,6 +2296,10 @@
         "properties": {
           "requestId": {
             "type": "string"
+          },
+          "developerId": {
+            "type": "string",
+            "description": "Optional developer identifier. If provided, it must be a non-empty string. When omitted, the authenticated user ID is used."
           },
           "apiId": {
             "type": "string"
@@ -1341,6 +2338,114 @@
           },
           "alreadyProcessed": {
             "type": "boolean"
+          }
+        }
+      },
+      "BillingBulkDeductEntry": {
+        "type": "object",
+        "required": [
+          "events",
+          "stats",
+          "period"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "apiId": {
+            "type": "string"
+          },
+          "endpointId": {
+            "type": "string"
+          },
+          "apiKeyId": {
+            "type": "string"
+          },
+          "amountUsdc": {
+            "type": "string",
+            "description": "Positive decimal string with up to 7 fractional digits"
+          }
+        }
+      },
+      "BillingBulkDeductRequest": {
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BillingBulkDeductEntry"
+            }
+          },
+          "idempotencyKey": {
+            "type": "string"
+          }
+        }
+      },
+      "BillingBulkDeductEntryResult": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "usageEventId",
+          "alreadyProcessed",
+          "deductionApplied",
+          "reconciliationRequired"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "usageEventId": {
+            "type": "string"
+          },
+          "stellarTxHash": {
+            "type": "string"
+          },
+          "alreadyProcessed": {
+            "type": "boolean"
+          },
+          "deductionApplied": {
+            "type": "boolean"
+          },
+          "reconciliationRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BillingBulkDeductResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "entryCount",
+          "deductedCount",
+          "totalDeductedAmountUsdc",
+          "results"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "entryCount": {
+            "type": "integer"
+          },
+          "deductedCount": {
+            "type": "integer"
+          },
+          "totalDeductedAmountUsdc": {
+            "type": "string"
+          },
+          "stellarTxHash": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingBulkDeductEntryResult"
+            }
           }
         }
       },
@@ -2196,6 +3301,9 @@
           "WEBHOOK_TIMESTAMP_OUT_OF_WINDOW",
           "MALFORMED_WEBHOOK_SIGNATURE",
           "INVALID_WEBHOOK_SIGNATURE",
+          "INVALID_DELIVERY_ID",
+          "INVALID_RETRY_POLICY",
+          "DLQ_ENTRY_NOT_FOUND",
           "INVALID_IP_FORMAT",
           "IP_NOT_ALLOWED",
           "DATABASE_NOT_AVAILABLE",
@@ -2217,9 +3325,127 @@
           "UNPROCESSABLE_ENTITY",
           "USAGE_AGGREGATE_NOT_FOUND",
           "INVALID_EXPORT_SCHEDULE",
-          "EXPORT_SCHEDULE_NOT_FOUND"
+          "EXPORT_SCHEDULE_NOT_FOUND",
+          "MISSING_AUTH_FIELDS",
+          "AUTH_NOT_IMPLEMENTED",
+          "COMPONENT_NOT_CONFIGURED"
         ],
         "description": "Canonical Callora backend error code."
+      },
+      "Dispute": {
+        "type": "object",
+        "required": [
+          "id",
+          "usage_event_id",
+          "opened_by",
+          "reason",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "usage_event_id": {
+            "type": "string"
+          },
+          "opened_by": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "REFUNDED",
+              "UPHELD"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resolved_by": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "DisputeEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "dispute_id",
+          "actor",
+          "action",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "dispute_id": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OpenDisputeRequest": {
+        "type": "object",
+        "required": [
+          "usage_event_id",
+          "reason"
+        ],
+        "properties": {
+          "usage_event_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      },
+      "ResolveDisputeRequest": {
+        "type": "object",
+        "required": [
+          "resolution"
+        ],
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "REFUNDED",
+              "UPHELD"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
       }
     }
   }

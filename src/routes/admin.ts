@@ -10,14 +10,15 @@ import { logger } from '../logger.js';
 import { createUsageStore, type UsageAdminStore } from '../services/usageStore.js';
 import {
   listQuotaRequests,
-  getQuotaRequest,
   approveQuotaRequest,
   rejectQuotaRequest,
 } from '../services/quotaService.js';
 import { createAdminWebhooksRouter } from './admin/webhooks.js';
 import { createAdminApisRouter } from './admin/apis.js';
 import { createAdminHealthProbesRouter } from './admin/health/probes.js';
-import { createAdminAuditRouter } from './admin/audit.js';
+import { createAdminCreditGrantsRouter } from './admin/billing/credits/grant.js';
+import { createAdminUsageExportRouter } from './admin/usage/export.js';
+import { createAdminKeyConcurrencyRouter } from './admin/keys/concurrency.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 const usageStore: UsageAdminStore = createUsageStore();
@@ -62,6 +63,8 @@ router.get('/users', async (req, res, next) => {
     next(new InternalServerError());
   }
 });
+
+router.use('/usage/export', createAdminUsageExportRouter());
 
 router.get('/usage/:developerId', async (req, res: Response, next) => {
   try {
@@ -222,9 +225,23 @@ router.use('/apis', createAdminApisRouter());
 router.use('/health/probes', createAdminHealthProbesRouter());
 
 // ---------------------------------------------------------------------------
-// Audit log listing
-// Mounts:  GET /api/admin/audit
+// GrantFox FWC26 prepaid-credit grants
+// Mount: POST /api/admin/billing/credits/grant
 // ---------------------------------------------------------------------------
-router.use('/audit', createAdminAuditRouter());
+router.use('/billing/credits', createAdminCreditGrantsRouter());
+
+// ---------------------------------------------------------------------------
+// GrantFox FWC26 per-key concurrency stats
+// Mounts: GET /api/admin/keys/concurrency
+//         GET /api/admin/keys/concurrency/:keyId
+// ---------------------------------------------------------------------------
+router.use('/keys', createAdminKeyConcurrencyRouter());
+
+// ---------------------------------------------------------------------------
+// Maintenance banner
+// Mount: POST /api/admin/maintenance/banner
+// ---------------------------------------------------------------------------
+import { createMaintenanceBannerRouter } from './admin/maintenance/banner.js';
+router.use('/maintenance/banner', createMaintenanceBannerRouter());
 
 export default router;

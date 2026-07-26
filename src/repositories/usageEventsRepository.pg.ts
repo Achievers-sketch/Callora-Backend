@@ -1,14 +1,10 @@
 import {
-  type UsageEventsRepository,
   type UsageEvent,
   type UsageEventQuery,
   type UserUsageEventQuery,
-  type UsageStats,
-  type UsageBucket,
-  type GroupBy,
 } from './usageEventsRepository.js';
 import { encodeCursor, type CursorPayload } from '../lib/cursorPagination.js';
-import { generateCursor, getNextCursor, decodeCursor } from '../lib/pagination.js';
+import { generateCursor, decodeCursor } from '../lib/pagination.js';
 import { readQuery, writeQuery } from '../db.js';
 
 export interface CreateUsageEventInput {
@@ -422,8 +418,7 @@ export class PgUsageEventsRepository implements UsageEventsPgRepository {
     }));
 
     // Store cursor info for route to use
-    (events as any)._nextCursor = nextCursor;
-    (events as any)._hasMore = hasMore;
+    Object.assign(events, { _nextCursor: nextCursor, _hasMore: hasMore });
 
     return events;
   }

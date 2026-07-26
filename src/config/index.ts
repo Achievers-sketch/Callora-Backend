@@ -213,6 +213,7 @@ export const config = {
     maxPerDeveloper: env.BILLING_MAX_CONCURRENCY_PER_DEV,
     semaphoreTtlMs: env.BILLING_SEMAPHORE_TTL_MS,
   },
+  routeBodyLimits: env.ROUTE_BODY_LIMITS,
   idempotency: {
     retentionWindowSeconds: env.IDEMPOTENCY_RETENTION_WINDOW_SECONDS,
     sweeperIntervalMs: env.IDEMPOTENCY_SWEEPER_INTERVAL_MS,
@@ -234,13 +235,6 @@ export const config = {
     thresholdMb: env.MEMORY_ACCOUNTING_THRESHOLD_MB,
   },
 
-  slowQueryAlerter: {
-    webhookUrl: env.SLOW_QUERY_ALERT_WEBHOOK_URL,
-    p95ThresholdMs: env.SLOW_QUERY_P95_THRESHOLD_MS,
-    pollIntervalMs: env.SLOW_QUERY_POLL_INTERVAL_MS,
-    dedupWindowMs: env.SLOW_QUERY_DEDUP_WINDOW_SECONDS * 1000,
-  },
-
   usageAnomalyDetector: {
     enabled: env.USAGE_ANOMALY_DETECTOR_ENABLED,
     multiplier: env.USAGE_ANOMALY_MULTIPLIER,
@@ -248,5 +242,23 @@ export const config = {
     windowMs: env.USAGE_ANOMALY_WINDOW_MS,
     baselineWindows: env.USAGE_ANOMALY_BASELINE_WINDOWS,
     dedupWindowMs: env.USAGE_ANOMALY_DEDUP_WINDOW_MS ?? env.USAGE_ANOMALY_WINDOW_MS,
+  },
+
+  monthlyInvoiceJob: {
+    intervalMs: env.MONTHLY_INVOICE_JOB_INTERVAL_MS,
+  },
+
+  sloAlert: {
+    enabled: Boolean(env.SLO_ALERT_WEBHOOK_URL) && env.SLO_ROUTE_CONFIGS.length > 0,
+    webhookUrl: env.SLO_ALERT_WEBHOOK_URL,
+    pollIntervalMs: env.SLO_ALERT_POLL_INTERVAL_MS,
+    dedupWindowMs: env.SLO_ALERT_DEDUP_WINDOW_MS,
+    observationWindowMs: env.SLO_ALERT_OBSERVATION_WINDOW_MS,
+    configs: env.SLO_ROUTE_CONFIGS as Array<{
+      method: string;
+      route: string;
+      maxErrorRate?: number;
+      maxLatencyP95Ms?: number;
+    }>,
   },
 } as const;
