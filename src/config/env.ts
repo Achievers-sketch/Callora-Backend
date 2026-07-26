@@ -115,6 +115,9 @@ export const envSchema = z
     // CORS
     CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
 
+    // Maintenance CORS allowlist (comma-separated origins; deny by default when empty)
+    MAINTENANCE_CORS_ALLOWED_ORIGINS: z.string().default(""),
+
     // Soroban RPC (optional)
     SOROBAN_RPC_ENABLED: z
       .string()

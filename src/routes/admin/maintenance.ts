@@ -1,11 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { correlationMiddleware, getCorrelationId, buildOutboundCorrelationHeaders } from '../../middleware/correlation.js';
-import { logger } from '../../logger.js';
+import { createMaintenanceCorsMiddleware } from '../../middleware/cors.js';
+
+const maintenanceCors = createMaintenanceCorsMiddleware();
 
 export const maintenanceRouter = Router();
 
-maintenanceRouter.use(correlationMiddleware);
+maintenanceRouter.use(maintenanceCors);
 
+// Global runtime state store tracking scheduled maintenance window configuration parameters
 export let activeMaintenanceWindow = {
   isEnabled: false,
   startTime: null as string | null,
