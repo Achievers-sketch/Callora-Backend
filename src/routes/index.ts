@@ -8,6 +8,7 @@ import { createBillingPortalRouter } from './billing/portal.js';
 import healthRouter from './health.js';
 import refundsRouter from './refunds.js';
 import { createApisRouter, type ApisRouterDeps } from './apis.js';
+import { createSpikeRouter } from './spike.js';
 import { createUsageRouter, type UsageRouterDeps } from './usage.js';
 import { createUsageSseRouter, type UsageSseBroadcaster } from './usage/sse.js';
 import { createLimitsRouter } from './limits.js';
@@ -40,6 +41,7 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
   const router = Router();
 
   router.use('/health', healthRouter);
+  router.use('/spike', createSpikeRouter());
   
   router.use('/apis', createApisRouter({
     apiRepository: deps.apiRepository,

@@ -24,8 +24,8 @@ declare global {
       apiKeyValue?: string;
       /** Enriched forensic context attached by auditEnrichMiddleware. */
       auditContext: AuditContext;
-      /** Correlation ID set by correlationMiddleware. */
-      correlationId: string;
+      /** AbortSignal for request timeout or client cancellation. */
+      signal?: AbortSignal;
     }
   }
 }
