@@ -1,6 +1,11 @@
 import { Router, Request, Response } from 'express';
+import { createMaintenanceCorsMiddleware } from '../../middleware/cors.js';
+
+const maintenanceCors = createMaintenanceCorsMiddleware();
 
 export const maintenanceRouter = Router();
+
+maintenanceRouter.use(maintenanceCors);
 
 // Global runtime state store tracking scheduled maintenance window configuration parameters
 export let activeMaintenanceWindow = {
