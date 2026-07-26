@@ -2,6 +2,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { getClientIp } from '../lib/clientIp.js';
 import { logger } from '../logger.js';
 import { resolveRequestUserId } from './requireAuth.js';
+import { TooManyRequestsError } from '../errors/index.js';
 
 export interface RateLimitOptions {
   windowMs: number;
@@ -83,12 +84,7 @@ export function createRateLimitMiddleware(
       });
 
       res.set('Retry-After', String(retryAfterSeconds));
-      res.status(429).json({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'Too Many Requests',
-        requestId,
-        retryAfterMs,
-      });
+      next(new TooManyRequestsError('Too Many Requests'));
       return;
     }
 

@@ -5,9 +5,11 @@ import { type UsageEventsPgRepository } from '../repositories/usageEventsReposit
 import { BadRequestError, InternalServerError, UnauthorizedError } from '../errors/index.js';
 import { parsePagination, parseCursorPagination, decodeCursor } from '../lib/pagination.js';
 import { parseCursor } from '../lib/cursorPagination.js';
+import { createRateLimitMiddleware } from '../middleware/rateLimit.js';
 
 export interface UsageRouterDeps {
   usageEventsRepository: UsageEventsRepository & Partial<UsageEventsPgRepository>;
+  rateLimitMiddleware?: ReturnType<typeof createRateLimitMiddleware>;
 }
 
 const isValidGroupBy = (value: string): value is GroupBy =>
@@ -55,6 +57,12 @@ const parseDate = (value: unknown): Date | null => {
 export function createUsageRouter(deps: UsageRouterDeps): Router {
   const router = Router();
   const { usageEventsRepository } = deps;
+  const rateLimitMiddleware = deps.rateLimitMiddleware ?? createRateLimitMiddleware({
+    windowMs: 60_000,
+    maxRequests: 60,
+  });
+
+  router.use(rateLimitMiddleware);
 
   router.get('/', requireAuth, async (req, res: Response<unknown, AuthenticatedLocals>, next) => {
     const user = res.locals.authenticatedUser;
