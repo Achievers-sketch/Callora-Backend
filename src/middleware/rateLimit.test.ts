@@ -1,7 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { errorHandler } from './errorHandler.js';
-import { createRateLimitMiddleware, InMemoryRateLimiter } from './rateLimit.js';
+import { createRateLimitMiddleware, TokenBucketRateLimiter, createTokenBucketRateLimitMiddleware } from './rateLimit.js';
 import { requireAuth, type AuthenticatedLocals } from './requireAuth.js';
 import { TEST_JWT_SECRET, signTestToken } from '../../tests/helpers/jwt.js';
 
@@ -126,5 +126,163 @@ describe('rateLimit middleware (token-bucket)', () => {
     expect(response.status).toBe(429);
     expect(response.body.success).toBe(false);
     expect(response.body.error.code).toBe('TOO_MANY_REQUESTS');
+  });
+});
+
+describe('TokenBucketRateLimiter', () => {
+  let now: number;
+
+  beforeEach(() => {
+    now = 100_000;
+  });
+
+  test('allows requests up to capacity', () => {
+    const limiter = new TokenBucketRateLimiter(3, 1);
+    expect(limiter.check('key', now)).toEqual({ allowed: true });
+    expect(limiter.check('key', now)).toEqual({ allowed: true });
+    expect(limiter.check('key', now)).toEqual({ allowed: true });
+  });
+
+  test('denies when tokens are exhausted', () => {
+    const limiter = new TokenBucketRateLimiter(2, 1);
+    limiter.check('key', now);
+    limiter.check('key', now);
+    const result = limiter.check('key', now);
+    expect(result.allowed).toBe(false);
+    expect(result.retryAfterMs).toBeGreaterThan(0);
+  });
+
+  test('refills tokens over time', () => {
+    const limiter = new TokenBucketRateLimiter(2, 1);
+    limiter.check('key', now);
+    limiter.check('key', now);
+    expect(limiter.check('key', now).allowed).toBe(false);
+
+    const result = limiter.check('key', now + 2000);
+    expect(result.allowed).toBe(true);
+  });
+
+  test('tracks buckets separately per key', () => {
+    const limiter = new TokenBucketRateLimiter(1, 1);
+    expect(limiter.check('user-a', now)).toEqual({ allowed: true });
+    expect(limiter.check('user-b', now)).toEqual({ allowed: true });
+    expect(limiter.check('user-a', now)).toEqual({ allowed: false, retryAfterMs: 1000 });
+    expect(limiter.check('user-b', now)).toEqual({ allowed: false, retryAfterMs: 1000 });
+  });
+
+  test('does not exceed capacity on refill', () => {
+    const limiter = new TokenBucketRateLimiter(3, 5);
+    limiter.check('key', now);
+    // After 10 seconds with refillRate=5, would add 50 tokens, but should cap at capacity=3
+    const result = limiter.check('key', now + 10_000);
+    expect(result.allowed).toBe(true);
+    // Should now have 2 tokens left (capacity - 1 after consuming)
+    expect(limiter.check('key', now + 10_000).allowed).toBe(true);
+    expect(limiter.check('key', now + 10_000).allowed).toBe(true);
+    expect(limiter.check('key', now + 10_000).allowed).toBe(false);
+  });
+
+  test('retryAfterMs is proportional to refill rate', () => {
+    const limiter = new TokenBucketRateLimiter(1, 2);
+    limiter.check('key', now);
+    const result = limiter.check('key', now);
+    expect(result.allowed).toBe(false);
+    expect(result.retryAfterMs).toBe(500);
+  });
+
+  test('reset clears all buckets', () => {
+    const limiter = new TokenBucketRateLimiter(1, 1);
+    limiter.check('key-a', now);
+    limiter.check('key-b', now);
+    limiter.reset();
+    expect(limiter.check('key-a', now)).toEqual({ allowed: true });
+    expect(limiter.check('key-b', now)).toEqual({ allowed: true });
+  });
+
+  test('partial refill accumulates fractional tokens across multiple checks', () => {
+    const limiter = new TokenBucketRateLimiter(1, 0.5);
+    limiter.check('key', now);
+    // After 1 second with refillRate=0.5, only 0.5 tokens — not enough to consume
+    expect(limiter.check('key', now + 1000).allowed).toBe(false);
+    // After 2 seconds, 1.0 tokens — enough to consume
+    expect(limiter.check('key', now + 2000).allowed).toBe(true);
+    // Next immediate request fails (0 tokens remaining)
+    expect(limiter.check('key', now + 2000).allowed).toBe(false);
+  });
+});
+
+describe('token bucket rate limit middleware', () => {
+  const originalSecret = process.env.JWT_SECRET;
+
+  function buildTokenBucketApp(capacity = 3, refillRate = 1) {
+    const app = express();
+    const rateLimit = createTokenBucketRateLimitMiddleware({ capacity, refillRate });
+
+    app.get(
+      '/protected',
+      rateLimit,
+      requireAuth,
+      (_req, res: express.Response<unknown, AuthenticatedLocals>) => {
+        res.json({ ok: true, userId: res.locals.authenticatedUser?.id });
+      },
+    );
+
+    app.use(errorHandler);
+    return app;
+  }
+
+  beforeEach(() => {
+    process.env.JWT_SECRET = TEST_JWT_SECRET;
+  });
+
+  afterEach(() => {
+    if (originalSecret !== undefined) {
+      process.env.JWT_SECRET = originalSecret;
+    } else {
+      delete process.env.JWT_SECRET;
+    }
+  });
+
+  test('returns 200 within burst capacity', async () => {
+    const app = buildTokenBucketApp(3, 1);
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(200);
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(200);
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(200);
+  });
+
+  test('returns 429 after burst capacity is exceeded', async () => {
+    const app = buildTokenBucketApp(2, 1);
+
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(200);
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(200);
+    const response = await request(app).get('/protected').set('x-user-id', 'user-1');
+
+    expect(response.status).toBe(429);
+    expect(response.headers['retry-after']).toBe('1');
+    expect(response.body.retryAfterMs).toBeGreaterThan(0);
+  });
+
+  test('tracks limits separately per user', async () => {
+    const app = buildTokenBucketApp(2, 1);
+
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(200);
+    await request(app).get('/protected').set('x-user-id', 'user-2').expect(200);
+
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(200);
+    await request(app).get('/protected').set('x-user-id', 'user-2').expect(200);
+
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(429);
+    await request(app).get('/protected').set('x-user-id', 'user-2').expect(429);
+  });
+
+  test('returns 429 with code TOO_MANY_REQUESTS', async () => {
+    const app = buildTokenBucketApp(1, 1);
+
+    await request(app).get('/protected').set('x-user-id', 'user-1').expect(200);
+    const response = await request(app).get('/protected').set('x-user-id', 'user-1');
+
+    expect(response.status).toBe(429);
+    expect(response.body.code).toBe('TOO_MANY_REQUESTS');
+    expect(response.body.message).toBe('Too Many Requests');
   });
 });
