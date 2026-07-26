@@ -1257,6 +1257,211 @@
         }
       }
     },
+    "/api/exports": {
+      "get": {
+        "summary": "List export artifacts for GrantFox FWC26 campaign",
+        "description": "Returns a paginated list of materialized export artifacts for the authenticated developer. Part of the GrantFox FWC26 (Stellar Wave) campaign. Each export provides a signed download URL for accessing the artifact from object storage.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of export records to return (1-100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Pagination offset",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "developerId",
+            "in": "query",
+            "description": "Filter by developer ID (admin-only)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Filter by export format",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "json"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Export artifacts retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "pagination"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "developerId",
+                          "format",
+                          "exportedAt",
+                          "expiresAt",
+                          "downloadUrl"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique export record identifier"
+                          },
+                          "developerId": {
+                            "type": "string",
+                            "description": "Developer identifier who owns this export"
+                          },
+                          "format": {
+                            "type": "string",
+                            "enum": [
+                              "csv",
+                              "json"
+                            ],
+                            "description": "Export file format"
+                          },
+                          "exportedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "ISO-8601 UTC timestamp when the export was created"
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "ISO-8601 UTC timestamp when the export record expires (7 days after creation)"
+                          },
+                          "downloadUrl": {
+                            "type": "string",
+                            "format": "uri",
+                            "description": "Signed download URL for the export artifact. Expires per EXPORT_SIGNED_URL_TTL_SECONDS (default 900s / 15 minutes)"
+                          }
+                        }
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "required": [
+                        "limit",
+                        "offset",
+                        "total"
+                      ],
+                      "properties": {
+                        "limit": {
+                          "type": "integer",
+                          "description": "Requested page size"
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "description": "Requested pagination offset"
+                        },
+                        "total": {
+                          "type": "integer",
+                          "description": "Total number of export records matching the query"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "550e8400-e29b-41d4-a716-446655440000",
+                      "developerId": "dev-123",
+                      "format": "csv",
+                      "exportedAt": "2026-06-01T00:00:00.000Z",
+                      "expiresAt": "2026-06-08T00:00:00.000Z",
+                      "downloadUrl": "https://s3.example.com/exports/dev-123/2026-06-01.csv?expires=1234567890&signature=abc123"
+                    }
+                  ],
+                  "pagination": {
+                    "limit": 20,
+                    "offset": 0,
+                    "total": 1
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "Authentication required",
+                  "requestId": "req-abc123def456"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - no developer profile found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "DEVELOPER_NOT_FOUND",
+                  "message": "No developer profile found for this account",
+                  "requestId": "req-abc123def456"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/developers/me/keys": {
       "get": {
         "summary": "List developer's own API keys",
