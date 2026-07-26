@@ -299,9 +299,8 @@ router.use('/quotas', createAdminQuotaBulkRouter());
 router.use('/keys', createAdminKeyConcurrencyRouter());
 
 // ---------------------------------------------------------------------------
-// Audit log listing and action replay
-// Mounts: GET  /api/admin/audit
-//         POST /api/admin/audit/replay
+// Admin audit-log listing
+// Mounts: GET /api/admin/audit
 // ---------------------------------------------------------------------------
 router.use('/audit', createAdminAuditRouter());
 
