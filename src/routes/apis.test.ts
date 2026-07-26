@@ -173,6 +173,42 @@ describe('createApisRouter', () => {
     expect(res.body.data).toHaveLength(1);
   });
 
+  it('sets an ETag header on GET /:id response', async () => {
+    const app = buildApp();
+
+    const res = await request(app).get('/api/apis/1');
+
+    expect(res.status).toBe(200);
+    expect(res.headers.etag).toBeDefined();
+    expect(res.headers.etag).toMatch(/^W\/"/);
+  });
+
+  it('returns 304 Not Modified for GET /:id when If-None-Match matches', async () => {
+    const app = buildApp();
+
+    const res1 = await request(app).get('/api/apis/1');
+    const etag = res1.headers.etag;
+    expect(etag).toBeDefined();
+
+    const res2 = await request(app)
+      .get('/api/apis/1')
+      .set('If-None-Match', etag);
+
+    expect(res2.status).toBe(304);
+    expect(res2.text).toBe('');
+  });
+
+  it('returns 200 for GET /:id when If-None-Match does not match', async () => {
+    const app = buildApp();
+
+    const res = await request(app)
+      .get('/api/apis/1')
+      .set('If-None-Match', 'W/"stale"');
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Weather API');
+  });
+
   it('returns 429 once the per-user limit for the API router is exceeded', async () => {
     const repo = new InMemoryApiRepository(
       [

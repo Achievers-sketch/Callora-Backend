@@ -106,7 +106,7 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
     }
   });
 
-  router.get('/:id', async (req, res, next) => {
+  router.get('/:id', etagMiddleware, async (req, res, next) => {
     try {
       const id = Number(req.params.id);
 

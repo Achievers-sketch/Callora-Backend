@@ -6,7 +6,8 @@ import { type UsageEventsPgRepository } from '../repositories/usageEventsReposit
 import { InternalServerError, UnauthorizedError } from '../errors/index.js';
 import { parsePagination, parseCursorPagination, decodeCursor } from '../lib/pagination.js';
 import { parseCursor } from '../lib/cursorPagination.js';
-import { logger } from '../logger.js';
+import { createUsageAccessLogMiddleware } from '../middleware/usageAccessLog.js';
+import { etagMiddleware } from '../middleware/etag.js';
 
 export interface UsageRouterDeps {
   usageEventsRepository: UsageEventsRepository & Partial<UsageEventsPgRepository>;
@@ -70,8 +71,9 @@ export function createUsageRouter(deps: UsageRouterDeps): Router {
   const router = Router();
   const { usageEventsRepository } = deps;
 
-  router.get('/', requireAuth, async (req: Request, res: Response<unknown, AuthenticatedLocals>, next: NextFunction) => {
-    const correlationId = (req.headers['x-correlation-id'] as string) || (req as any).id || crypto.randomUUID();
+  const usageAccessLog = createUsageAccessLogMiddleware();
+
+  router.get('/', requireAuth, usageAccessLog, etagMiddleware, async (req, res: Response<unknown, AuthenticatedLocals>, next) => {
     const user = res.locals.authenticatedUser;
 
     if (!user) {
