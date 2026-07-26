@@ -16,6 +16,7 @@ import {
 import type { VaultRepository } from '../repositories/vaultRepository.js';
 import { config } from '../config/index.js';
 import { redactSimulationDetails } from '../lib/simulationDiagnostics.js';
+import { successEnvelope, errorEnvelope, getRequestId } from '../lib/envelope.js';
 
 export interface DepositPrepareRequest {
   amount_usdc: string;

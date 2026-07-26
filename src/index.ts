@@ -29,6 +29,7 @@ import { createGatewayRouter } from "./routes/gatewayRoutes.js";
 import { createProxyRouter } from "./routes/proxyRoutes.js";
 import adminRouter from "./routes/admin.js";
 import { createUsageAnomaliesRouter } from "./routes/admin/usage/anomalies.js";
+import refundsRouter from "./routes/refunds.js";
 import { defaultDeveloperRepository } from "./repositories/developerRepository.js";
 import { createBillingService } from "./services/billingService.js";
 import { createRateLimiter } from "./services/rateLimiter.js";
@@ -230,6 +231,7 @@ if (isDirectExecution) {
   // adminRouter's `/usage/:developerId` route.
   app.use("/api/admin/usage/anomalies", createUsageAnomaliesRouter({ pool }));
   app.use("/api/admin", adminRouter);
+  app.use("/api/refunds", refundsRouter);
 
   // Legacy gateway route (existing)
   const gatewayRouter = createGatewayRouter({
@@ -360,9 +362,9 @@ if (isDirectExecution) {
         { timeoutMs: config.listingsCache.warmupTimeoutMs },
       );
 
-      // Warm the quotas cache before accepting traffic to avoid cold-cache spikes on startup.
-      const { warmupQuotasCache } = await import("./services/quotasCacheWarm.js");
-      await warmupQuotasCache({ timeoutMs: config.quotasCache.warmupTimeoutMs });
+      // Warm the refunds cache before accepting traffic to avoid cold-cache spikes on startup.
+      const { warmupRefundsCache } = await import("./services/refundsCacheWarm.js");
+      await warmupRefundsCache({ timeoutMs: config.refundsCache.warmupTimeoutMs });
 
       revenueLedgerIndexerJob.start();
       settlementStatusSyncJob.start();

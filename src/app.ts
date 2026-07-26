@@ -288,14 +288,8 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   // Per-dependency health probe — detailed status for each configured dependency
   app.use('/api/health/dependencies', createDependenciesRouter(dependencies?.healthCheckConfig));
 
-  // Rate-limit health dependency probe — operational status of the rate-limit subsystem
-  app.use('/api/rate-limit/health', createRateLimitHealthRouter({
-    limiter: restRateLimiter,
-    windowMs: restRateLimitOptions.windowMs,
-    maxRequests: restRateLimitOptions.maxRequests,
-  }));
-
-  app.get('/api/health', async (_req, res) => {
+  app.get('/api/health', async (req, res) => {
+    const requestId = getRequestId(req);
     // If no health check config provided, return simple health check
     if (!dependencies?.healthCheckConfig) {
       const data = { status: 'ok', service: 'callora-backend' };

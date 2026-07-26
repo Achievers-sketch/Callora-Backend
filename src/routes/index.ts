@@ -6,6 +6,7 @@ import path from 'path';
 import billingRouter from './billing.js';
 import { createBillingPortalRouter } from './billing/portal.js';
 import healthRouter from './health.js';
+import refundsRouter from './refunds.js';
 import { createApisRouter, type ApisRouterDeps } from './apis.js';
 import { createUsageRouter, type UsageRouterDeps } from './usage.js';
 import { createUsageSseRouter, type UsageSseBroadcaster } from './usage/sse.js';
@@ -103,6 +104,8 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
   if (deps.restRateLimiter) {
     router.use('/limits', createLimitsRouter(deps.restRateLimiter).router);
   }
+
+  router.use('/refunds', refundsRouter);
 
   // Serve OpenAPI 3.1 JSON contract
   router.get('/openapi.json', (_req, res) => {
