@@ -265,3 +265,114 @@ protected independently by HMAC signature verification.
 
 When the limit is exceeded, the server responds with **HTTP 429** and a
 `Retry-After` header indicating how many seconds to wait before retrying.
+
+
+---
+
+## Webhook Subsystem Health Probe
+
+**GET** `/api/webhooks/health`
+
+Returns an at-a-glance operational snapshot of the webhook subsystem. The
+endpoint is read-only and requires no authentication, making it safe to use
+with load-balancer health checks and uptime monitors.
+
+### Status semantics
+
+| Status       | HTTP code | Meaning |
+|--------------|-----------|---------|
+| `"ok"`       | `200`     | DLQ is empty; no recent delivery failures. |
+| `"degraded"` | `200`     | One or more recent delivery failures, but DLQ depth is below the warning threshold (10). The subsystem is functional. |
+| `"down"`     | `503`     | DLQ depth has reached or exceeded 10, indicating a systemic delivery problem. |
+
+### Response shape
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-07-26T12:00:00.000Z",
+  "webhooks": {
+    "registeredCount": 3,
+    "dlqDepth": 0,
+    "recentFailures": []
+  }
+}
+```
+
+#### `webhooks` object
+
+| Field              | Type     | Description |
+|--------------------|----------|-------------|
+| `registeredCount`  | `number` | Total active webhook subscriptions. |
+| `dlqDepth`         | `number` | Current entries in the dead-letter queue. |
+| `recentFailures`   | `array`  | Up to 20 most-recent failed delivery attempts, newest first. |
+
+#### `recentFailures` entry
+
+| Field        | Type     | Description |
+|--------------|----------|-------------|
+| `deliveryId` | `string` | Unique ID assigned to the delivery attempt. |
+| `developerId`| `string` | Developer whose subscription triggered the delivery. |
+| `event`      | `string` | Webhook event type that was being delivered. |
+| `url`        | `string` | Target URL that was called (registered by the developer). |
+| `failedAt`   | `string` | ISO-8601 timestamp of the final failure. |
+| `lastError`  | `string` | Human-readable, non-sensitive last error description. |
+| `attempts`   | `number` | Total delivery attempts made before giving up. |
+
+> **Security note:** Webhook secrets are never included in this response.
+> Only non-sensitive operational metadata is returned.
+
+### Example responses
+
+**All healthy:**
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-07-26T12:00:00.000Z",
+  "webhooks": {
+    "registeredCount": 3,
+    "dlqDepth": 0,
+    "recentFailures": []
+  }
+}
+```
+
+**Degraded (recent failures, DLQ not full):**
+```json
+{
+  "status": "degraded",
+  "timestamp": "2026-07-26T12:00:00.000Z",
+  "webhooks": {
+    "registeredCount": 3,
+    "dlqDepth": 2,
+    "recentFailures": [
+      {
+        "deliveryId": "abc123",
+        "developerId": "dev_001",
+        "event": "settlement_completed",
+        "url": "https://example.com/hook",
+        "failedAt": "2026-07-26T11:59:00.000Z",
+        "lastError": "HTTP 503 Service Unavailable",
+        "attempts": 5
+      }
+    ]
+  }
+}
+```
+
+**Down (DLQ at or above threshold of 10):**
+```http
+HTTP/1.1 503 Service Unavailable
+Content-Type: application/json
+
+{
+  "status": "down",
+  "timestamp": "2026-07-26T12:00:00.000Z",
+  "webhooks": {
+    "registeredCount": 3,
+    "dlqDepth": 10,
+    "recentFailures": [ ... ]
+  }
+}
+```
+
