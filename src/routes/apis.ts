@@ -1,6 +1,13 @@
 import { Router, type Response } from 'express';
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors/index.js';
-import { parsePagination, paginatedResponse } from '../lib/pagination.js';
+import {
+  parsePagination,
+  paginatedResponse,
+  parseCursorPagination,
+  decodeCursor,
+  generateCursor,
+  cursorPaginatedResponse,
+} from '../lib/pagination.js';
 import { buildCacheKey, listingsCache, type ListingsCache } from '../lib/listingsCache.js';
 import { recordCacheHit, recordCacheMiss } from '../metrics.js';
 import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
@@ -40,30 +47,77 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
 
   router.get('/', etagMiddleware, async (req, res, next) => {
     try {
-      const { limit, offset } = parsePagination(req.query as Record<string, string>);
+      const query = req.query as Record<string, string>;
       const category = typeof req.query.category === 'string' ? req.query.category : undefined;
       const search = typeof req.query.search === 'string' ? req.query.search : undefined;
 
-      // ── Cache lookup ──────────────────────────────────────────────────────
+      // ── Cursor-based pagination path ───────────────────────────────────────
+      if (query.cursor !== undefined && query.cursor.trim() !== '') {
+        const { limit, cursor: rawCursor } = parseCursorPagination(query);
+
+        // decodeCursor throws a ValidationError (400) on malformed input.
+        const { created_at: cursorCreatedAt, id: cursorId } = decodeCursor(rawCursor!);
+        const cursorDate = new Date(cursorCreatedAt);
+        const cursorIdNum = parseInt(cursorId, 10);
+        if (!Number.isFinite(cursorIdNum) || cursorIdNum <= 0) {
+          next(new BadRequestError('Invalid cursor: id component must be a positive integer'));
+          return;
+        }
+
+        const cacheKey = buildCacheKey({ limit, offset: 0, category, search, cursor: rawCursor });
+        const cached = cache.get(cacheKey);
+        if (cached !== undefined) {
+          recordCacheHit();
+          res.json(cached);
+          return;
+        }
+
+        recordCacheMiss();
+        // Fetch limit+1 rows; the repository already applies +1 internally.
+        const rows = await apiRepository.listPublic({
+          limit,
+          category,
+          search,
+          cursor: { after_created_at: cursorDate, after_id: cursorIdNum },
+        });
+
+        const hasMore = rows.length > limit;
+        const pageRows = rows.slice(0, limit);
+
+        // Generate the next cursor from the last item in this page.
+        let nextCursor: string | undefined;
+        if (hasMore && pageRows.length > 0) {
+          const last = pageRows[pageRows.length - 1];
+          nextCursor = generateCursor(last.created_at.toISOString(), String(last.id));
+        }
+
+        const response = cursorPaginatedResponse(pageRows, {
+          limit,
+          nextCursor,
+          hasMore,
+        });
+
+        cache.set(cacheKey, response);
+        res.json(response);
+        return;
+      }
+
+      // ── Offset-based pagination path (legacy / default) ────────────────────
+      const { limit, offset } = parsePagination(query);
+
       const cacheKey = buildCacheKey({ limit, offset, category, search });
       const cached = cache.get(cacheKey);
-
       if (cached !== undefined) {
-        // Serve from cache and record a hit metric.
         recordCacheHit();
         res.json(cached);
         return;
       }
 
-      // ── Cache miss: read from DB, populate cache ──────────────────────────
       recordCacheMiss();
       const apis = await apiRepository.listPublic({ limit, offset, category, search });
       const response = paginatedResponse(apis, { limit, offset });
 
-      // Store the serialisable response object so subsequent requests within
-      // the TTL window skip the DB entirely.
       cache.set(cacheKey, response);
-
       res.json(response);
     } catch (error) {
       next(error);

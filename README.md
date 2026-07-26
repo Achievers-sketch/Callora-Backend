@@ -2,6 +2,69 @@
 
 API gateway, usage metering, and billing services for the Callora API marketplace. Talks to Soroban contracts and Horizon for on-chain settlement.
 
+## API Catalog Pagination (`GET /api/apis`)
+
+The public API catalog endpoint supports two pagination modes. Cursor pagination is preferred for stable, gap-free traversal over large catalogs; offset pagination is available for backward compatibility.
+
+### Cursor pagination (recommended)
+
+Results are ordered **newest-first** by `(created_at DESC, id DESC)`. Pass the opaque `nextCursor` value returned in one response as the `cursor` query parameter on the next request.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `cursor`  | string | Opaque base64 keyset cursor (from `meta.nextCursor`). Omit for the first page. |
+| `limit`   | integer 1–100 | Page size. Defaults to 20. |
+| `category` | string | Optional category filter. |
+| `search`  | string | Optional name substring filter. |
+
+**Request — first page:**
+```
+GET /api/apis?limit=2
+```
+```json
+{
+  "data": [ { "id": 5, ... }, { "id": 4, ... } ],
+  "meta": {
+    "limit": 2,
+    "hasMore": true,
+    "nextCursor": "MjAyNC0wMS0wNFQwMDowMDowMC4wMDBafDQ="
+  }
+}
+```
+
+**Request — subsequent page:**
+```
+GET /api/apis?limit=2&cursor=MjAyNC0wMS0wNFQwMDowMDowMC4wMDBafDQ=
+```
+```json
+{
+  "data": [ { "id": 3, ... }, { "id": 2, ... } ],
+  "meta": {
+    "limit": 2,
+    "hasMore": true,
+    "nextCursor": "MjAyNC0wMS0wMlQwMDowMDowMC4wMDBafDI="
+  }
+}
+```
+
+When `hasMore` is `false` and `nextCursor` is absent, you have reached the last page.
+
+A malformed or tampered cursor returns `HTTP 400` with `code: "VALIDATION_ERROR"`.
+
+### Offset pagination (legacy)
+
+Omit `cursor` and use `limit` + `offset` (or `page`). Results may shift if new APIs are inserted during traversal.
+
+```
+GET /api/apis?limit=20&offset=40
+```
+```json
+{
+  "data": [ ... ],
+  "meta": { "limit": 20, "offset": 40 }
+}
+```
+
 ## Fee Abstraction
 
 Developers can pay Stellar transaction fees using app tokens. The backend wraps their inner transaction in a Stellar fee-bump envelope signed by the platform fee account.
@@ -70,7 +133,7 @@ The migration is in `migrations/0019_disputes.sql` (rollback: `migrations/0019_d
 
 - Health check: `GET /api/health`
 - Marketplace routes:
-  - `GET /api/apis`
+  - `GET /api/apis` — list public (active, non-deleted) APIs with cursor **or** offset pagination
   - `GET /api/apis/:id`
   - `POST /api/apis` for authenticated developers to register an API with priced endpoints
 - Usage route: `GET /api/usage`
