@@ -314,6 +314,34 @@ describe('POST /api/quota/requests', () => {
     expect(res.status).toBe(201);
     expect(res.headers['x-request-id']).toBe('test-req-id-123');
   });
+
+  it('201 - returns X-Correlation-Id header and body field when client sends correlation-id', async () => {
+    const app = createTestApp();
+
+    const res = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'client-corr-42')
+      .send(validBody);
+
+    expect(res.status).toBe(201);
+    expect(res.headers['x-correlation-id']).toBe('client-corr-42');
+    expect(res.body.correlationId).toBe('client-corr-42');
+  });
+
+  it('201 - generates X-Correlation-Id when header is absent', async () => {
+    const app = createTestApp();
+
+    const res = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .send(validBody);
+
+    expect(res.status).toBe(201);
+    expect(res.headers['x-correlation-id']).toBeDefined();
+    expect(res.body.correlationId).toBeDefined();
+    expect(res.headers['x-correlation-id']).toEqual(res.body.correlationId);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -489,6 +517,37 @@ describe('GET /api/quota/requests', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(0);
   });
+
+  it('200 - returns X-Correlation-Id header and body field on list', async () => {
+    const app = createTestApp();
+
+    await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'list-corr-99')
+      .send(validBody);
+
+    const res = await request(app)
+      .get('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'list-corr-99');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-correlation-id']).toBe('list-corr-99');
+    expect(res.body.correlationId).toBe('list-corr-99');
+  });
+
+  it('400 - returns correlationId in validation error response', async () => {
+    const app = createTestApp();
+
+    const res = await request(app)
+      .get('/api/quota/requests?status=invalid')
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'err-corr-77');
+
+    expect(res.status).toBe(400);
+    expect(res.body.correlationId).toBe('err-corr-77');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -617,6 +676,26 @@ describe('GET /api/quota/requests/:id', () => {
     expect(res.body.data.status).toBe('approved');
     expect(res.body.data.adminNotes).toBe('Approved after review');
     expect(res.body.data.resolvedBy).toBe('admin-1');
+  });
+
+  it('200 - returns X-Correlation-Id header and body field on fetch by id', async () => {
+    const app = createTestApp();
+
+    const created = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .send(validBody);
+
+    const id = created.body.data.id;
+
+    const res = await request(app)
+      .get(`/api/quota/requests/${id}`)
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'fetch-corr-55');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-correlation-id']).toBe('fetch-corr-55');
+    expect(res.body.correlationId).toBe('fetch-corr-55');
   });
 
   it('200 - caller can access their own rejected request', async () => {
