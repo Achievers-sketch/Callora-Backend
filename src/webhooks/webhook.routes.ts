@@ -10,11 +10,21 @@ import {
 } from './webhook.signature.js';
 import { AppError, BadRequestError, NotFoundError } from '../errors/index.js';
 import { createRestRateLimitMiddleware } from '../middleware/restRateLimit.js';
+import { createWebhookAccessLogMiddleware } from '../middleware/webhookAccessLog.js';
 import { config } from '../config/index.js';
 import { logger } from '../logger.js';
 import { validateRetryPolicy } from '../services/webhookRetry.js';
 
 const router = Router();
+
+/**
+ * Structured access log middleware scoped to webhook routes.
+ * Includes req-id, latency, status, size, and actor (developerId from route params).
+ */
+const webhookAccessLog = createWebhookAccessLogMiddleware();
+
+// Apply access logging to all webhook routes
+router.use(webhookAccessLog);
 
 /**
  * Rate limiter for webhook management routes (POST /, GET /:id, DELETE /:id).
