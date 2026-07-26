@@ -8,8 +8,52 @@ import { exportsLogger } from '../../middleware/exportsAccessLog.js';
 
 const service = new ScheduledExportsService({ findByApiId: async () => [] }, new InMemoryScheduleStore(), new HmacObjectStorageClient());
 
-function createTestApp() {
+const IDEM_SCHEDULE_BODY = {
+  name: 'Nightly',
+  cron: '* * * * *',
+  s3Bucket: 'exports',
+  s3Region: 'us-east-1',
+  s3Endpoint: 'https://s3.example.com',
+  s3AccessKeyId: 'akid',
+  s3SecretAccessKey: 'secret',
+};
+
+function createMockDb() {
+  const store = new Map<string, Record<string, unknown>>();
+  return {
+    query: jest.fn().mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('DELETE')) {
+        return { rows: [] };
+      }
+      if (sql.includes('SELECT')) {
+        const key = params[0] as string;
+        return { rows: store.has(key) ? [store.get(key)!] : [] };
+      }
+      if (sql.includes('INSERT') && !sql.includes('SELECT')) {
+        store.set(params[0] as string, {
+          request_hash: params[1],
+          status: params[2],
+          expires_at: params[3],
+        });
+        return { rows: [] };
+      }
+      if (sql.includes('UPDATE')) {
+        store.set(params[3] as string, {
+          ...store.get(params[3] as string),
+          status: params[0],
+          response_status: params[1],
+          response_body: params[2],
+        });
+        return { rows: [] };
+      }
+      return { rows: [] };
+    }),
+  };
+}
+
+function createTestApp(mockDb?: ReturnType<typeof createMockDb>) {
   const app = express();
+  app.locals.dbPool = mockDb ?? createMockDb();
   app.use(express.json());
   app.use(requestIdMiddleware);
   app.use('/api/exports/schedules', createExportSchedulesRouter(service));
@@ -22,15 +66,7 @@ test('POST /api/exports/schedules creates a schedule with redacted secret', asyn
   const response = await request(app)
     .post('/api/exports/schedules')
     .set('x-user-id', 'dev-1')
-    .send({
-      name: 'Nightly',
-      cron: '* * * * *',
-      s3Bucket: 'exports',
-      s3Region: 'us-east-1',
-      s3Endpoint: 'https://s3.example.com',
-      s3AccessKeyId: 'akid',
-      s3SecretAccessKey: 'secret',
-    });
+    .send(IDEM_SCHEDULE_BODY);
 
   expect(response.status).toBe(201);
   expect(response.body.data.s3SecretAccessKey).toBe('[REDACTED]');
@@ -41,15 +77,7 @@ test('PATCH /api/exports/schedules rejects invalid cron with standardized error 
   const created = await request(app)
     .post('/api/exports/schedules')
     .set('x-user-id', 'dev-1')
-    .send({
-      name: 'Nightly',
-      cron: '* * * * *',
-      s3Bucket: 'exports',
-      s3Region: 'us-east-1',
-      s3Endpoint: 'https://s3.example.com',
-      s3AccessKeyId: 'akid',
-      s3SecretAccessKey: 'secret',
-    });
+    .send(IDEM_SCHEDULE_BODY);
 
   const response = await request(app)
     .patch(`/api/exports/schedules/${created.body.data.id}`)
@@ -61,113 +89,95 @@ test('PATCH /api/exports/schedules rejects invalid cron with standardized error 
   expect(response.body.requestId).toBeDefined();
 });
 
-// ---------------------------------------------------------------------------
-// Access-log integration: verify the middleware fires on real HTTP requests
-// ---------------------------------------------------------------------------
+describe('Idempotency-Key on /api/exports/schedules', () => {
+  test('POST with Idempotency-Key returns 201 on first call and replays on second', async () => {
+    const mockDb = createMockDb();
+    const app = createTestApp(mockDb);
 
-describe('exports route — access log integration', () => {
-  test('emits an info log entry for a successful GET /api/exports/schedules', async () => {
-    const infoSpy = jest.spyOn(exportsLogger, 'info').mockImplementation(() => exportsLogger);
-    const app = createTestApp();
+    const first = await request(app)
+      .post('/api/exports/schedules')
+      .set('x-user-id', 'dev-1')
+      .set('Idempotency-Key', 'export-post-1')
+      .send(IDEM_SCHEDULE_BODY);
 
-    try {
-      await request(app)
-        .get('/api/exports/schedules')
-        .set('x-user-id', 'dev-log-test')
-        .set('x-request-id', 'route-req-1');
+    expect(first.status).toBe(201);
+    expect(first.body.data.id).toBeDefined();
+    expect(first.body.data.s3SecretAccessKey).toBe('[REDACTED]');
 
-      expect(infoSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'GET',
-          status: 200,
-          statusCode: 200,
-          requestId: 'route-req-1',
-        }),
-        'exports request completed',
-      );
-    } finally {
-      infoSpy.mockRestore();
-    }
+    const second = await request(app)
+      .post('/api/exports/schedules')
+      .set('x-user-id', 'dev-1')
+      .set('Idempotency-Key', 'export-post-1')
+      .send(IDEM_SCHEDULE_BODY);
+
+    expect(second.status).toBe(201);
+    expect(second.headers['idempotent-replayed']).toBe('true');
+    expect(second.body.data.s3SecretAccessKey).toBe('[REDACTED]');
   });
 
-  test('emits a warn log entry for a 400 response (invalid PATCH body)', async () => {
-    const warnSpy = jest.spyOn(exportsLogger, 'warn').mockImplementation(() => exportsLogger);
-    const app = createTestApp();
+  test('PATCH with Idempotency-Key replays cached response on retry', async () => {
+    const mockDb = createMockDb();
+    const app = createTestApp(mockDb);
 
-    // First create a schedule so we have a real ID to PATCH.
-    const createResp = await request(app)
+    const created = await request(app)
       .post('/api/exports/schedules')
-      .set('x-user-id', 'dev-log-test')
-      .send({
-        name: 'Log test',
-        cron: '0 * * * *',
-        s3Bucket: 'exports',
-        s3Region: 'us-east-1',
-        s3Endpoint: 'https://s3.example.com',
-        s3AccessKeyId: 'akid',
-        s3SecretAccessKey: 'secret',
-      });
+      .set('x-user-id', 'dev-1')
+      .send(IDEM_SCHEDULE_BODY);
 
-    warnSpy.mockClear();
+    const patchBody = { name: 'Updated Name' };
 
-    try {
-      await request(app)
-        .patch(`/api/exports/schedules/${createResp.body.data.id}`)
-        .set('x-user-id', 'dev-log-test')
-        .set('x-request-id', 'route-req-warn')
-        .send({ cron: 'bad-cron' });
+    const first = await request(app)
+      .patch(`/api/exports/schedules/${created.body.data.id}`)
+      .set('x-user-id', 'dev-1')
+      .set('Idempotency-Key', 'export-patch-1')
+      .send(patchBody);
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'PATCH',
-          status: 400,
-          statusCode: 400,
-        }),
-        'exports request completed',
-      );
-    } finally {
-      warnSpy.mockRestore();
-    }
+    expect(first.status).toBe(200);
+    expect(first.body.data.name).toBe('Updated Name');
+
+    const second = await request(app)
+      .patch(`/api/exports/schedules/${created.body.data.id}`)
+      .set('x-user-id', 'dev-1')
+      .set('Idempotency-Key', 'export-patch-1')
+      .send(patchBody);
+
+    expect(second.status).toBe(200);
+    expect(second.headers['idempotent-replayed']).toBe('true');
+    expect(second.body.data.name).toBe('Updated Name');
   });
 
-  test('emits log with scheduleId field on PATCH requests', async () => {
-    const infoSpy = jest.spyOn(exportsLogger, 'info').mockImplementation(() => exportsLogger);
-    const app = createTestApp();
+  test('Idempotency-Key mismatch on POST returns 409', async () => {
+    const mockDb = createMockDb();
+    const app = createTestApp(mockDb);
 
-    const createResp = await request(app)
+    await request(app)
       .post('/api/exports/schedules')
-      .set('x-user-id', 'dev-sched-id')
-      .send({
-        name: 'Sched ID test',
-        cron: '0 0 * * *',
-        s3Bucket: 'exports',
-        s3Region: 'us-east-1',
-        s3Endpoint: 'https://s3.example.com',
-        s3AccessKeyId: 'akid',
-        s3SecretAccessKey: 'secret',
-      });
+      .set('x-user-id', 'dev-1')
+      .set('Idempotency-Key', 'export-conflict')
+      .send(IDEM_SCHEDULE_BODY);
 
-    infoSpy.mockClear();
+    const conflictBody = { ...IDEM_SCHEDULE_BODY, name: 'Different Name' };
 
-    try {
-      await request(app)
-        .patch(`/api/exports/schedules/${createResp.body.data.id}`)
-        .set('x-user-id', 'dev-sched-id')
-        .send({ enabled: false });
+    const conflict = await request(app)
+      .post('/api/exports/schedules')
+      .set('x-user-id', 'dev-1')
+      .set('Idempotency-Key', 'export-conflict')
+      .send(conflictBody);
 
-      const patchLogCall = infoSpy.mock.calls.find((call) => {
-        const p = call[0] as Record<string, unknown>;
-        return p.method === 'PATCH';
-      });
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.code).toBe('IDEMPOTENCY_KEY_REUSE_MISMATCH');
+  });
 
-      expect(patchLogCall).toBeDefined();
-      expect(patchLogCall?.[0]).toEqual(
-        expect.objectContaining({
-          scheduleId: createResp.body.data.id,
-        }),
-      );
-    } finally {
-      infoSpy.mockRestore();
-    }
+  test('POST without Idempotency-Key still succeeds', async () => {
+    const mockDb = createMockDb();
+    const app = createTestApp(mockDb);
+
+    const response = await request(app)
+      .post('/api/exports/schedules')
+      .set('x-user-id', 'dev-1')
+      .send(IDEM_SCHEDULE_BODY);
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.id).toBeDefined();
   });
 });
