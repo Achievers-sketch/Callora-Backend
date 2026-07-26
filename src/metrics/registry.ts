@@ -7,9 +7,23 @@ const billingDeductDuration = new client.Histogram({
   buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
 });
 
+const refreshTokenDuration = new client.Histogram({
+  name: 'refresh_token_duration_seconds',
+  help: 'Latency of POST /api/refresh-token in seconds',
+  labelNames: ['route', 'status_code'],
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+});
+
 export function recordBillingDeductDuration(statusCode: number, durationMs: number): void {
   billingDeductDuration.observe(
     { route: '/api/billing/deduct', status_code: String(statusCode) },
+    durationMs / 1000,
+  );
+}
+
+export function recordRefreshTokenDuration(statusCode: number, durationMs: number): void {
+  refreshTokenDuration.observe(
+    { route: '/api/refresh-token', status_code: String(statusCode) },
     durationMs / 1000,
   );
 }
@@ -18,4 +32,8 @@ export function resetBillingDeductMetrics(): void {
   billingDeductDuration.reset();
 }
 
-export { billingDeductDuration };
+export function resetRefreshTokenMetrics(): void {
+  refreshTokenDuration.reset();
+}
+
+export { billingDeductDuration, refreshTokenDuration };

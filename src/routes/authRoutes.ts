@@ -3,6 +3,7 @@ import { AuthController } from '../controllers/authController.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { bodyValidator } from '../middleware/validate.js';
 import { createLoginThrottle } from '../middleware/loginThrottle.js';
+import { refreshTokenHistogramMiddleware } from '../middleware/metricsHistogram.js';
 import { config } from '../config/index.js';
 import { z } from 'zod';
 
@@ -36,6 +37,7 @@ export function createAuthRoutes(authController: AuthController): Router {
 
   // Refresh access token
   router.post('/refresh', 
+    refreshTokenHistogramMiddleware,
     bodyValidator(refreshTokenSchema),
     (req, res, next) => authController.refreshToken(req, res, next)
   );
