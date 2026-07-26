@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
 import { validate } from '../middleware/validate.js';
+import { createRateLimitMiddleware } from '../middleware/rateLimit.js';
 import {
   BadRequestError,
   ConflictError,
@@ -37,6 +38,10 @@ export interface SubscriptionRoutesDeps {
   subscriptionRepository: SubscriptionRepository;
   apiRepository: ApiRepository;
   developerRepository: DeveloperRepository;
+  /** Rate limit window in ms (default: 60_000). */
+  rateLimitWindowMs?: number;
+  /** Max requests per window (default: 30). */
+  rateLimitMaxRequests?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +73,15 @@ const listQuerySchema = z.object({
 export function createSubscriptionRouter(deps: SubscriptionRoutesDeps): Router {
   const router = Router();
   const { subscriptionRepository, apiRepository, developerRepository } = deps;
+
+  // Per-user token-bucket rate limit. Configurable via deps for testing.
+  const subscriptionRateLimit = createRateLimitMiddleware({
+    windowMs: deps.rateLimitWindowMs ?? 60_000,
+    maxRequests: deps.rateLimitMaxRequests ?? 30,
+  });
+
+  // Apply rate limiting to all subscription routes
+  router.use(subscriptionRateLimit);
 
   // -------------------------------------------------------------------------
   // POST /api/subscriptions
