@@ -31,7 +31,10 @@ import adminRouter from "./routes/admin.js";
 import { createUsageAnomaliesRouter } from "./routes/admin/usage/anomalies.js";
 import { defaultDeveloperRepository } from "./repositories/developerRepository.js";
 import { createBillingService } from "./services/billingService.js";
-import { createRateLimiter } from "./services/rateLimiter.js";
+import {
+  createConfiguredRateLimiter,
+  resolveRateLimiterConfig,
+} from "./services/rateLimiter.js";
 import { PgUsageEventsRepository } from "./repositories/usageEventsRepository.pg.js";
 import { createRevenueLedgerIndexerJob } from "./services/revenueLedgerIndexer.js";
 import { RevenueSettlementService } from "./services/revenueSettlementService.js";
@@ -130,7 +133,14 @@ if (isDirectExecution) {
   };
 
   const billing = createBillingService(MOCK_DEVELOPER_BALANCES);
-  const rateLimiter = createRateLimiter(5, 60_000); // 5 reqs per minute
+  // Per-API-key token-bucket rate limit shared by /api/gateway and /v1/call.
+  // Backed by Postgres (RATE_LIMIT_STORE=postgres) so the bucket state is
+  // consistent across multiple gateway instances; defaults to an in-memory
+  // store otherwise. See RATE_LIMIT_* in src/config/env.ts.
+  const rateLimiter = createConfiguredRateLimiter(
+    resolveRateLimiterConfig(config.rateLimiter),
+    pool,
+  );
   const usageStore = createPostgresUsageStore(pool);
   const settlementStore = createPostgresSettlementStore(pool);
   const usageEventsRepository = new PgUsageEventsRepository(pool);
