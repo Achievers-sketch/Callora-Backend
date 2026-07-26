@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
+import { correlationMiddleware, getCorrelationId, buildOutboundCorrelationHeaders } from '../../middleware/correlation.js';
+import { logger } from '../../logger.js';
 
 export const maintenanceRouter = Router();
 
-// Global runtime state store tracking scheduled maintenance window configuration parameters
+maintenanceRouter.use(correlationMiddleware);
+
 export let activeMaintenanceWindow = {
   isEnabled: false,
   startTime: null as string | null,
@@ -11,22 +14,33 @@ export let activeMaintenanceWindow = {
 };
 
 maintenanceRouter.post('/maintenance', (req: Request, res: Response): void => {
+  const correlationId = getCorrelationId() ?? req.correlationId;
   const { isEnabled, startTime, endTime, reason } = req.body;
 
+  logger.info('Maintenance window update requested', { correlationId, isEnabled });
+
   if (typeof isEnabled !== 'boolean') {
-    res.status(400).json({ error: 'Property "isEnabled" must be an explicit boolean value.' });
+    res.status(400).json({
+      error: 'Property "isEnabled" must be an explicit boolean value.',
+      correlationId,
+    });
     return;
   }
 
   if (isEnabled) {
     if (!startTime || !endTime) {
-      res.status(400).json({ error: 'startTime and endTime ISO parameters are mandatory when maintenance is active.' });
+      res.status(400).json({
+        error: 'startTime and endTime ISO parameters are mandatory when maintenance is active.',
+        correlationId,
+      });
       return;
     }
-    
-    // Quick validation check for malformed date formats
+
     if (isNaN(Date.parse(startTime)) || !isNaN(Number(startTime)) || isNaN(Date.parse(endTime)) || !isNaN(Number(endTime))) {
-      res.status(400).json({ error: 'Invalid ISO date strings provided for tracking windows.' });
+      res.status(400).json({
+        error: 'Invalid ISO date strings provided for tracking windows.',
+        correlationId,
+      });
       return;
     }
   }
@@ -38,12 +52,24 @@ maintenanceRouter.post('/maintenance', (req: Request, res: Response): void => {
     reason: reason || 'Scheduled infrastructure updates.',
   };
 
-  res.status(200).json({ 
-    message: 'Maintenance window state configurations updated successfully.', 
-    data: activeMaintenanceWindow 
+  logger.info('Maintenance window updated', { correlationId, activeMaintenanceWindow });
+
+  res.status(200).json({
+    message: 'Maintenance window state configurations updated successfully.',
+    data: activeMaintenanceWindow,
+    correlationId,
   });
 });
 
 maintenanceRouter.get('/maintenance', (req: Request, res: Response) => {
-  res.status(200).json(activeMaintenanceWindow);
+  const correlationId = getCorrelationId() ?? req.correlationId;
+
+  logger.info('Maintenance window status requested', { correlationId });
+
+  res.status(200).json({
+    ...activeMaintenanceWindow,
+    correlationId,
+  });
 });
+
+export { buildOutboundCorrelationHeaders };

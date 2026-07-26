@@ -24,6 +24,8 @@ declare global {
       apiKeyValue?: string;
       /** Enriched forensic context attached by auditEnrichMiddleware. */
       auditContext: AuditContext;
+      /** Correlation ID set by correlationMiddleware. */
+      correlationId: string;
     }
   }
 }
