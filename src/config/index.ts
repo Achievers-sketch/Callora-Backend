@@ -221,6 +221,9 @@ export const config = {
   listingsCache: {
     warmupTimeoutMs: env.LISTINGS_CACHE_WARMUP_TIMEOUT_MS,
   },
+  quotasCache: {
+    warmupTimeoutMs: env.QUOTAS_CACHE_WARMUP_TIMEOUT_MS,
+  },
   bulkEndpointLimit: env.BULK_ENDPOINT_LIMIT,
 
   slowQueryAlerter: {
