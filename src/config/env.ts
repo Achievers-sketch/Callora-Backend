@@ -89,10 +89,17 @@ export const envSchema = z
     WEBHOOK_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().optional(),
     WEBHOOK_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().optional(),
     WEBHOOK_SECRET_ROTATION_GRACE_MS: z.coerce.number().int().positive().default(24 * 60 * 60 * 1000),
-    RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().optional(),
-    RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().optional(),
-    RATE_LIMIT_STORE: z.string().optional(),
-    RATE_LIMIT_PG_TABLE: z.string().optional(),
+    // Per-API-key token-bucket rate limit applied to /api/gateway and /v1/call.
+    RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(5),
+    RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+    RATE_LIMIT_STORE: z.enum(["memory", "postgres"]).default("memory"),
+    RATE_LIMIT_PG_TABLE: z
+      .string()
+      .regex(
+        /^[a-z_][a-z0-9_]*$/i,
+        "RATE_LIMIT_PG_TABLE must contain only letters, numbers, and underscores",
+      )
+      .default("gateway_rate_limit_buckets"),
 
     // Login rate limiting (IP-based throttling for auth attempts)
     LOGIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(5),

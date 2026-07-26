@@ -363,6 +363,10 @@ For request-id validation, AsyncLocalStorage propagation, structured logging, an
 | `PROXY_TIMEOUT_MS` | No | `30000` | Proxy request timeout (ms) |
 | `REST_RATE_LIMIT_WINDOW_MS` | No | `60000` | Window length for REST API rate limiting (ms) |
 | `REST_RATE_LIMIT_MAX_REQUESTS` | No | `100` | Max REST API requests allowed per user/IP per window |
+| `RATE_LIMIT_MAX_REQUESTS` | No | `5` | Per-API-key token-bucket limit for `/api/gateway` and `/v1/call`; exceeding it returns `429` with `Retry-After` |
+| `RATE_LIMIT_WINDOW_MS` | No | `60000` | Token-bucket refill window for `RATE_LIMIT_MAX_REQUESTS` (ms) |
+| `RATE_LIMIT_STORE` | No | `memory` | `memory` or `postgres`. Use `postgres` to share bucket state across multiple gateway instances |
+| `RATE_LIMIT_PG_TABLE` | No | `gateway_rate_limit_buckets` | Table name used when `RATE_LIMIT_STORE=postgres` (auto-created) |
 | `CORS_ALLOWED_ORIGINS` | No | `http://localhost:5173` | Comma-separated allowed origins |
 | `SOROBAN_RPC_ENABLED` | No | `false` | Enable Soroban RPC health check |
 | `SOROBAN_RPC_URL` | If `SOROBAN_RPC_ENABLED=true` | — | Soroban RPC endpoint URL |
