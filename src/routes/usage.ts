@@ -6,11 +6,11 @@ import { type UsageEventsPgRepository } from '../repositories/usageEventsReposit
 import { InternalServerError, UnauthorizedError } from '../errors/index.js';
 import { parsePagination, parseCursorPagination, decodeCursor } from '../lib/pagination.js';
 import { parseCursor } from '../lib/cursorPagination.js';
-import { createUsageAccessLogMiddleware } from '../middleware/usageAccessLog.js';
-import { etagMiddleware } from '../middleware/etag.js';
+import { createRateLimitMiddleware } from '../middleware/rateLimit.js';
 
 export interface UsageRouterDeps {
   usageEventsRepository: UsageEventsRepository & Partial<UsageEventsPgRepository>;
+  rateLimitMiddleware?: ReturnType<typeof createRateLimitMiddleware>;
 }
 
 // ============================================================================
@@ -70,6 +70,12 @@ const UsageQuerySchema = z.object({
 export function createUsageRouter(deps: UsageRouterDeps): Router {
   const router = Router();
   const { usageEventsRepository } = deps;
+  const rateLimitMiddleware = deps.rateLimitMiddleware ?? createRateLimitMiddleware({
+    windowMs: 60_000,
+    maxRequests: 60,
+  });
+
+  router.use(rateLimitMiddleware);
 
   const usageAccessLog = createUsageAccessLogMiddleware();
 
