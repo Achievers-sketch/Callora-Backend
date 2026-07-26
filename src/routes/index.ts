@@ -8,6 +8,7 @@ import { createBillingPortalRouter } from './billing/portal.js';
 import healthRouter from './health.js';
 import { createApisRouter, type ApisRouterDeps } from './apis.js';
 import { createUsageRouter, type UsageRouterDeps } from './usage.js';
+import { createUsageSseRouter, type UsageSseBroadcaster } from './usage/sse.js';
 import { createLimitsRouter } from './limits.js';
 import { InMemoryRestRateLimiter } from '../middleware/restRateLimit.js';
 import { createUsageCsvRouter } from './usage/csv.js';
@@ -31,6 +32,7 @@ export interface ApiRouterDeps extends Partial<UsageRouterDeps>, Partial<ApisRou
   subscriptionRepository?: SubscriptionRepository;
   developerRepository?: DeveloperRepository;
   apiRepository?: ApiRepository;
+  usageSseBroadcaster?: UsageSseBroadcaster;
 }
 
 export function createApiRouter(deps: ApiRouterDeps = {}): Router {
@@ -50,6 +52,10 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
 
   router.use('/usage/by-endpoint', createUsageByEndpointRouter({
     usageEventsRepository: deps.usageEventsRepository!
+  }));
+
+  router.use('/usage/sse', createUsageSseRouter({
+    broadcaster: deps.usageSseBroadcaster,
   }));
 
   router.use('/usage', createUsageRouter({
