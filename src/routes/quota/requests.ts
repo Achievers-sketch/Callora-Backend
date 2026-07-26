@@ -25,8 +25,12 @@ import {
 import { logger } from '../../logger.js';
 import { NotFoundError, UnauthorizedError } from '../../errors/index.js';
 import { withSpan } from '../../otel/spans.js';
+import { correlationMiddleware } from '../../middleware/correlation.js';
 
 const router = Router();
+
+// Propagate X-Correlation-Id across every quota self-service request.
+router.use(correlationMiddleware);
 
 /**
  * POST /api/quota/requests
@@ -65,6 +69,7 @@ router.post(
           quotaRequestId: request.id,
           developerId: user.id,
           requestedTier: request.requestedTier,
+          correlationId: (req as Request & { correlationId?: string }).correlationId,
         });
 
         res.status(201).json({ data: request });
@@ -124,6 +129,7 @@ router.get(
           developerId: user.id,
           count: ownRequests.length,
           statusFilter: statusParam,
+          correlationId: (req as Request & { correlationId?: string }).correlationId,
         });
 
         res.json({ data: ownRequests });
@@ -166,6 +172,7 @@ router.get(
         logger.info('Quota request fetched', {
           quotaRequestId: request.id,
           developerId: user.id,
+          correlationId: (req as Request & { correlationId?: string }).correlationId,
         });
 
         res.json({ data: request });

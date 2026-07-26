@@ -804,3 +804,122 @@ describe('Tracing spans for /api/quota/requests', () => {
     expect(spans[0].ended).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// X-Correlation-Id propagation tests
+// ---------------------------------------------------------------------------
+
+describe('X-Correlation-Id propagation on /api/quota/requests', () => {
+  beforeEach(() => {
+    setQuotaRequestStore(new InMemoryQuotaRequestStore());
+  });
+
+  it('returns X-Correlation-Id header in POST response when client sends one', async () => {
+    const app = createTestApp();
+
+    const res = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'client-corr-abc-123')
+      .send(validBody);
+
+    expect(res.status).toBe(201);
+    expect(res.headers['x-correlation-id']).toBe('client-corr-abc-123');
+  });
+
+  it('returns X-Correlation-Id header in GET list response when client sends one', async () => {
+    const app = createTestApp();
+
+    const res = await request(app)
+      .get('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'list-corr-xyz-456');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-correlation-id']).toBe('list-corr-xyz-456');
+  });
+
+  it('returns X-Correlation-Id header in GET /:id response when client sends one', async () => {
+    const app = createTestApp();
+
+    const created = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .send(validBody);
+
+    const id = created.body.data.id;
+
+    const res = await request(app)
+      .get(`/api/quota/requests/${id}`)
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'get-corr-def-789');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-correlation-id']).toBe('get-corr-def-789');
+  });
+
+  it('generates X-Correlation-Id when client does not send one', async () => {
+    const app = createTestApp();
+
+    const res = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .send(validBody);
+
+    expect(res.status).toBe(201);
+    expect(res.headers['x-correlation-id']).toBeDefined();
+    expect(typeof res.headers['x-correlation-id']).toBe('string');
+    expect(res.headers['x-correlation-id'].length).toBeGreaterThan(0);
+  });
+
+  it('falls back to x-request-id when x-correlation-id is absent', async () => {
+    const app = createTestApp();
+
+    const res = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-request-id', 'fallback-req-id-999')
+      .send(validBody);
+
+    expect(res.status).toBe(201);
+    // When no x-correlation-id is sent, the middleware falls back to req.id
+    // which is set by requestIdMiddleware from x-request-id
+    expect(res.headers['x-correlation-id']).toBe('fallback-req-id-999');
+  });
+
+  it('sanitises incoming x-correlation-id before echoing', async () => {
+    const app = createTestApp();
+
+    const res = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', '  trimmed-corr  ')
+      .send(validBody);
+
+    expect(res.status).toBe(201);
+    expect(res.headers['x-correlation-id']).toBe('trimmed-corr');
+  });
+
+  it('propagates x-correlation-id through POST then GET /:id flow', async () => {
+    const app = createTestApp();
+
+    const postRes = await request(app)
+      .post('/api/quota/requests')
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'flow-corr-abc')
+      .send(validBody);
+
+    expect(postRes.status).toBe(201);
+    expect(postRes.headers['x-correlation-id']).toBe('flow-corr-abc');
+
+    const id = postRes.body.data.id;
+
+    const getRes = await request(app)
+      .get(`/api/quota/requests/${id}`)
+      .set('x-user-id', 'dev-1')
+      .set('x-correlation-id', 'flow-corr-abc');
+
+    expect(getRes.status).toBe(200);
+    expect(getRes.headers['x-correlation-id']).toBe('flow-corr-abc');
+  });
+});
