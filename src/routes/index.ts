@@ -16,7 +16,9 @@ import { InMemoryRestRateLimiter } from '../middleware/restRateLimit.js';
 import { createUsageCsvRouter } from './usage/csv.js';
 import { createUsageByEndpointRouter } from './usage/byEndpoint.js';
 import { createExportSchedulesRouter } from './exports/schedules.js';
+import { createExportsRouter } from './exports.js';
 import type { ScheduledExportsService } from '../services/scheduledExports.js';
+import type { ReportExporterService } from '../services/reportExporter.js';
 import { createSubscriptionRouter } from './subscriptionRoutes.js';
 import { createRefreshTokenRouter } from './refresh-token.js';
 import type { SubscriptionRepository } from '../repositories/subscriptionRepository.js';
@@ -32,6 +34,7 @@ export interface ApiRouterDeps extends Partial<UsageRouterDeps>, Partial<ApisRou
   restRateLimiter?: InMemoryRestRateLimiter;
   perDevConcurrency?: RequestHandler;
   scheduledExportsService?: ScheduledExportsService;
+  reportExporterService?: ReportExporterService;
   subscriptionRepository?: SubscriptionRepository;
   developerRepository?: DeveloperRepository;
   apiRepository?: ApiRepository;
@@ -70,6 +73,14 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
 
   if (deps.scheduledExportsService) {
     router.use('/exports/schedules', createExportSchedulesRouter(deps.scheduledExportsService));
+  }
+
+  // GrantFox FWC26 campaign: exports endpoint for materialized export artifacts
+  if (deps.reportExporterService && deps.developerRepository) {
+    router.use('/exports', createExportsRouter({
+      reportExporterService: deps.reportExporterService,
+      developerRepository: deps.developerRepository,
+    }));
   }
 
   // Subscriptions — developers subscribe to marketplace APIs with metering preferences.
