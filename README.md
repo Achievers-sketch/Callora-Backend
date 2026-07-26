@@ -79,7 +79,7 @@ The migration is in `migrations/0019_disputes.sql` (rollback: `migrations/0019_d
 - Admin usage anomalies: `GET /api/admin/usage/anomalies` returns per-API daily usage anomalies (z-score spikes/drops) for admin review, filterable by `from`/`to`/`apiId`/`threshold`/`limit` (admin auth + IP allowlist)
 - Admin usage export: `GET /api/admin/usage/export` streams usage events as CSV or JSON for reporting, with optional `from`/`to`/`developerId`/`apiId`/`format` filters (admin auth + IP allowlist); see [docs/admin-usage-export.md](./docs/admin-usage-export.md)
 - Admin DB explain: `POST /api/admin/db/explain` runs `EXPLAIN (ANALYZE, FORMAT JSON)` on a read-only SQL query and returns the query plan for diagnostic use (admin auth + IP allowlist); see [docs/admin-db-explain.md](./docs/admin-db-explain.md)
-- Admin grant credits: `POST /api/admin/billing/credits/grant` grants prepaid USDC credits to a developer for the GrantFox FWC26 campaign. Body: `{ "user_id": string, "amount_usdc": string }`. A fixed +4 USDC campaign buffer is added automatically. Returns `201` with `{ data: { user_id, amount_usdc, balance_usdc, campaign, updated_at } }`. Requires admin auth + IP allowlist. Audit-logged under `GRANT_PREPAID_CREDITS`.
+- Per-API-key concurrency: `GET /api/admin/keys/concurrency` (and `/:keyId`) report how many gateway requests each API key has in flight right now, with an optional per-key ceiling that fails fast with `429` (admin auth + IP allowlist); see [docs/per-key-concurrency.md](./docs/per-key-concurrency.md)
 - Usage anomaly detector: background worker emits `usage.anomaly.detected` when per-developer 5-minute traffic exceeds a rolling 12-window baseline by a configurable multiplier (see `docs/usage-anomaly-detector.md`)
 - Settlement reconciliation: nightly worker that reconciles DB settlement status with on-chain Horizon transaction data, detecting discrepancies like missing transactions, stale pending settlements, and false failures (see `docs/settlement-reconciliation-worker.md`)
 - Multi-region read-replica routing: optional round-robin routing of SELECT queries to PostgreSQL read replicas via `REPLICA_URLS`; writes always use the primary; automatic fallback to primary on replica failure (see [docs/replica-routing.md](./docs/replica-routing.md))
@@ -253,6 +253,8 @@ callora-backend/
 | `STELLAR_TRANSACTION_TIMEOUT` | Transaction timeout (seconds) | `30` |
 | `BILLING_MAX_CONCURRENCY_PER_DEV` | Max concurrent deducts per developer | `1` |
 | `BILLING_SEMAPHORE_TTL_MS` | Idle semaphore state TTL in ms | `300000` |
+| `KEY_MAX_CONCURRENCY_PER_KEY` | Max concurrent in-flight gateway requests per API key; beyond it requests fail fast with `429`. See [docs/per-key-concurrency.md](./docs/per-key-concurrency.md). | `50` |
+| `KEY_SEMAPHORE_TTL_MS` | Idle per-key concurrency state TTL in ms | `300000` |
 | `IDEMPOTENCY_SWEEPER_INTERVAL_MS` | Interval for periodic idempotency cleanup in milliseconds | `60000` |
 | `CIRCUIT_BREAKER_THRESHOLD` | Failures before opening circuit | `5` |
 | `CIRCUIT_BREAKER_COOLDOWN_MS` | Cooldown period (ms) | `30000` |

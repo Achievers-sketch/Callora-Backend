@@ -10,6 +10,7 @@ import {
   recordEndpointThroughputSaturation,
 } from '../metrics.js';
 import { createMapBackedGatewayApiKeyAuthMiddleware } from '../middleware/gatewayApiKeyAuth.js';
+import { createConfiguredPerKeyConcurrencyMiddleware } from '../middleware/perKeyConcurrency.js';
 import { buildHopByHopSet } from '../lib/hopByHop.js';
 import {
   buildUpstreamTargetUrl,
@@ -109,10 +110,15 @@ export function createProxyRouter(deps: ProxyDeps): Router {
     },
   });
 
+  // Tracks in-flight requests per API key on the shared semaphore that
+  // GET /api/admin/keys/concurrency reads from. Must run after authMiddleware
+  // so that req.apiKeyRecord is populated.
+  const perKeyConcurrency = deps.perKeyConcurrency ?? createConfiguredPerKeyConcurrencyMiddleware();
+
   // Use a param of 0 to capture the wildcard path (everything after the slug)
-  router.all('/:apiSlugOrId/*', authMiddleware, handleProxy);
+  router.all('/:apiSlugOrId/*', authMiddleware, perKeyConcurrency, handleProxy);
   // Also handle requests without a trailing path (e.g. /v1/call/my-api)
-  router.all('/:apiSlugOrId', authMiddleware, handleProxy);
+  router.all('/:apiSlugOrId', authMiddleware, perKeyConcurrency, handleProxy);
 
   async function handleProxy(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
