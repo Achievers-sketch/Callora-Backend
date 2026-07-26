@@ -37,7 +37,7 @@ import { performHealthCheck, type HealthCheckConfig } from './services/healthChe
 import { createDependenciesRouter } from './routes/health/dependencies.js';
 import { createRateLimitHealthRouter } from './routes/rate-limit/health.js';
 import quotaRequestsRouter from './routes/quota/requests.js';
-import { createFeatureFlagsRouter } from './routes/feature-flags.js';
+import quotaCountsRouter from './routes/quotas/counts.js';
 import { parsePagination, paginatedResponse } from './lib/pagination.js';
 import { InMemoryVaultRepository, type VaultRepository } from './repositories/vaultRepository.js';
 import { DepositController } from './controllers/depositController.js';
@@ -337,6 +337,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
 
   // Quota self-service — developers submit requests, admins manage via /api/admin/quota/requests
   app.use('/api/quota/requests', quotaRequestsRouter);
+  app.use('/api/quotas/counts', quotaCountsRouter);
 
   // Refunds — developers submit refund requests, admins approve/reject
   app.use('/api/refunds', refundsRouter);
