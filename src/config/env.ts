@@ -234,6 +234,13 @@ export const envSchema = z
     BILLING_MAX_CONCURRENCY_PER_DEV: z.coerce.number().int().positive().default(1),
     BILLING_SEMAPHORE_TTL_MS: z.coerce.number().int().positive().default(300000),
 
+    // Gateway per-API-key concurrency control.
+    // The default ceiling is deliberately generous: the primary purpose is
+    // observability via GET /api/admin/keys/concurrency. Operators opt into
+    // enforcement by lowering KEY_MAX_CONCURRENCY_PER_KEY.
+    KEY_MAX_CONCURRENCY_PER_KEY: z.coerce.number().int().positive().default(50),
+    KEY_SEMAPHORE_TTL_MS: z.coerce.number().int().positive().default(300000),
+
     // Idempotency
     IDEMPOTENCY_RETENTION_WINDOW_SECONDS: z.coerce.number().int().positive().default(86400),
     IDEMPOTENCY_SWEEPER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),

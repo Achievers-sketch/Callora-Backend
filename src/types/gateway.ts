@@ -142,6 +142,8 @@ export interface ProxyDeps {
   registry: ApiRegistry;
   apiKeys?: Map<string, ApiKey>;
   authMiddleware?: RequestHandler;
+  /** Per-API-key concurrency tracker. Defaults to the shared-semaphore middleware. */
+  perKeyConcurrency?: RequestHandler;
   proxyConfig?: Partial<ProxyConfig>;
   circuitBreakerStore?: CircuitBreakerStore;
 }
