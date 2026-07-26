@@ -18,6 +18,100 @@ export interface RateLimitCheckResult {
   retryAfterMs?: number;
 }
 
+// ─── Token Bucket Rate Limiter ───────────────────────────────────────────────
+
+export interface TokenBucketOptions {
+  capacity: number;
+  refillRate: number;
+}
+
+interface TokenBucketState {
+  tokens: number;
+  lastRefill: number;
+}
+
+export class TokenBucketRateLimiter {
+  private readonly buckets = new Map<string, TokenBucketState>();
+
+  constructor(
+    private readonly capacity: number,
+    private readonly refillRate: number,
+  ) {}
+
+  check(key: string, now = Date.now()): RateLimitCheckResult {
+    const bucket = this.buckets.get(key);
+
+    if (!bucket) {
+      this.buckets.set(key, {
+        tokens: this.capacity - 1,
+        lastRefill: now,
+      });
+      return { allowed: true };
+    }
+
+    const elapsedMs = now - bucket.lastRefill;
+    if (elapsedMs > 0) {
+      const tokensToAdd = (elapsedMs / 1000) * this.refillRate;
+      bucket.tokens = Math.min(this.capacity, bucket.tokens + tokensToAdd);
+      bucket.lastRefill = now;
+    }
+
+    if (bucket.tokens >= 1) {
+      bucket.tokens -= 1;
+      return { allowed: true };
+    }
+
+    const retryAfterMs = Math.ceil((1000 / this.refillRate) * (1 - bucket.tokens));
+    return { allowed: false, retryAfterMs };
+  }
+
+  reset(): void {
+    this.buckets.clear();
+  }
+}
+
+export function createTokenBucketRateLimitMiddleware(
+  options: TokenBucketOptions,
+  limiter = new TokenBucketRateLimiter(options.capacity, options.refillRate),
+): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const key = getRateLimitKey(req);
+    const result = limiter.check(key);
+
+    if (!result.allowed) {
+      const retryAfterMs = result.retryAfterMs ?? 1000;
+      const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+      const requestId: string = (req as Request & { id?: string }).id ?? 'unknown';
+
+      logger.warn('[tokenBucketRateLimit] request limit exceeded', {
+        requestId,
+        key,
+        retryAfterMs,
+      });
+
+      res.set('Retry-After', String(retryAfterSeconds));
+      res.status(429).json({
+        code: 'TOO_MANY_REQUESTS',
+        message: 'Too Many Requests',
+        requestId,
+        retryAfterMs,
+      });
+      return;
+    }
+
+    next();
+  };
+}
+
+export function createCreditsRateLimitMiddleware(
+  options?: TokenBucketOptions,
+): RequestHandler {
+  const opts: TokenBucketOptions = options ?? { capacity: 10, refillRate: 1 };
+  return createTokenBucketRateLimitMiddleware(opts);
+}
+
+// ─── Fixed-Window Rate Limiter ───────────────────────────────────────────────
+
 export class InMemoryRateLimiter {
   private readonly buckets = new Map<string, RateLimitBucket>();
 

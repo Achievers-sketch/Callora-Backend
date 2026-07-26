@@ -7,8 +7,19 @@ import { requireAuth, type AuthenticatedLocals } from '../../middleware/requireA
 import { validate } from '../../middleware/validate.js';
 import { defaultCreditsRepository, type CreditsRepository } from '../../repositories/creditsRepository.js';
 import { logger } from '../../logger.js';
+import { TokenBucketRateLimiter, createTokenBucketRateLimitMiddleware } from '../../middleware/rateLimit.js';
 
 const router = Router();
+
+const creditsRateLimiter = new TokenBucketRateLimiter(10, 1);
+const creditsRateLimit = createTokenBucketRateLimitMiddleware(
+  { capacity: 10, refillRate: 1 },
+  creditsRateLimiter,
+);
+
+export function resetCreditsRateLimit(): void {
+  creditsRateLimiter.reset();
+}
 
 /**
  * Validation schema for query parameters
@@ -51,6 +62,7 @@ interface CreditsBalanceResponse {
  */
 router.get(
   '/',
+  creditsRateLimit,
   requireAuth,
   validate({ query: getCreditsQuerySchema }),
   async (

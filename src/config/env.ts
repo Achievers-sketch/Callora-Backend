@@ -98,6 +98,10 @@ export const envSchema = z
     LOGIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(5),
     LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000), // 1 minute sliding window
 
+    // Credits endpoint token-bucket rate limiting
+    CREDITS_RATE_LIMIT_CAPACITY: z.coerce.number().int().positive().default(10),
+    CREDITS_RATE_LIMIT_REFILL_RATE: z.coerce.number().positive().default(1),
+
     // CORS
     CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
 

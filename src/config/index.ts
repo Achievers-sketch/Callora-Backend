@@ -155,6 +155,11 @@ export const config = {
     maxRequests: env.LOGIN_RATE_LIMIT_MAX_REQUESTS,
   },
 
+  creditsRateLimit: {
+    capacity: env.CREDITS_RATE_LIMIT_CAPACITY,
+    refillRate: env.CREDITS_RATE_LIMIT_REFILL_RATE,
+  },
+
   rateLimiter: {
     maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
     windowMs: env.RATE_LIMIT_WINDOW_MS,
