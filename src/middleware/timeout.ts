@@ -1,60 +1,69 @@
-import { type Request, type Response, type NextFunction } from 'express';
-import { GatewayTimeoutError } from '../errors/index.js';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { logger } from '../logger.js';
 
-export interface TimeoutOptions {
-  timeoutMs: number;
+declare global {
+  namespace Express {
+    interface Request {
+      signal?: AbortSignal;
+    }
+  }
 }
 
-/**
- * Middleware that applies a per-request timeout.
- * Attaches a standard AbortSignal to `req.signal` for cooperative abort logic.
- */
-export function timeoutMiddleware(options: TimeoutOptions) {
+export interface TimeoutOptions {
+  durationMs: number;
+  message?: string;
+}
+
+const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_MESSAGE = 'Request timed out';
+
+export function createTimeoutMiddleware(
+  options: TimeoutOptions = { durationMs: DEFAULT_TIMEOUT_MS },
+): RequestHandler {
+  const durationMs = options.durationMs > 0 ? options.durationMs : DEFAULT_TIMEOUT_MS;
+  const message = options.message ?? DEFAULT_MESSAGE;
+
   return (req: Request, res: Response, next: NextFunction): void => {
-    // 1. Determine timeout duration (default to options.timeoutMs)
-    let timeoutMs = options.timeoutMs;
-
-    // Check query parameter override
-    if (typeof req.query.timeout === 'string') {
-      const parsed = parseInt(req.query.timeout, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        timeoutMs = parsed;
-      }
-    }
-
-    // Check header override
-    const headerTimeout = req.header('x-timeout-ms');
-    if (headerTimeout) {
-      const parsed = parseInt(headerTimeout, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        timeoutMs = parsed;
-      }
-    }
-
-    // 2. Set up AbortController for cooperative abort
     const controller = new AbortController();
     req.signal = controller.signal;
 
-    // 3. Set timeout timer
     const timer = setTimeout(() => {
-      if (!res.headersSent) {
-        controller.abort();
-        next(new GatewayTimeoutError('Request timeout exceeded'));
+      if (res.writableEnded || res.destroyed) {
+        return;
       }
-    }, timeoutMs);
 
-    // 4. Register cleanup event listeners
-    res.on('finish', () => {
-      clearTimeout(timer);
-    });
+      controller.abort();
 
-    res.on('close', () => {
+      const requestId: string = (req as Request & { id?: string }).id ?? 'unknown';
+
+      logger.warn('[timeout] request timed out', {
+        requestId,
+        method: req.method,
+        path: req.path,
+        durationMs,
+      });
+
+      res.status(504).json({
+        success: false,
+        error: {
+          code: 'GATEWAY_TIMEOUT',
+          message,
+        },
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+    }, durationMs);
+
+    const cleanup = (): void => {
       clearTimeout(timer);
-      // If the client disconnects or connection drops, trigger cooperative abort
-      if (!res.headersSent) {
-        controller.abort();
-      }
-    });
+      res.removeListener('finish', cleanup);
+      res.removeListener('close', cleanup);
+      res.removeListener('error', cleanup);
+    };
+
+    res.once('finish', cleanup);
+    res.once('close', cleanup);
+    res.once('error', cleanup);
 
     next();
   };

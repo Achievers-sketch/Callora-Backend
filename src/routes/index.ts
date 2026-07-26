@@ -22,6 +22,7 @@ import { createRefreshTokenRouter } from './refresh-token.js';
 import type { SubscriptionRepository } from '../repositories/subscriptionRepository.js';
 import type { DeveloperRepository } from '../repositories/developerRepository.js';
 import type { ApiRepository } from '../repositories/apiRepository.js';
+import { createForecastRouter } from './forecast.js';
 
 const openApiPath = path.join(process.cwd(), 'docs/openapi.json');
 const openApiSpec = JSON.parse(readFileSync(openApiPath, 'utf8'));
@@ -64,6 +65,8 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
   router.use('/usage', createUsageRouter({
     usageEventsRepository: deps.usageEventsRepository!
   }));
+
+  router.use('/forecast', createForecastRouter());
 
   if (deps.scheduledExportsService) {
     router.use('/exports/schedules', createExportSchedulesRouter(deps.scheduledExportsService));
