@@ -1,13 +1,48 @@
 import express from 'express';
 import request from 'supertest';
+
 import { errorHandler } from '../../../middleware/errorHandler.js';
-import { setQuotaRequestStore, createQuotaRequest, type QuotaRequestStore, InMemoryQuotaRequestStore } from '../../../services/quotaService.js';
 import { createAdminQuotaBulkRouter } from './bulk.js';
 
 const ADMIN_KEY = 'test-admin-key';
-const noopUpdateOverrides = async () => {};
 
-function buildApp() {
+function createMockDb(rows: Array<{ plan_overrides: string | null }>) {
+  const queuedRows = [...rows];
+
+  const tx = {
+    select: jest.fn(() => ({
+      from: jest.fn(() => ({
+        where: jest.fn(() => ({
+          limit: jest.fn(async () => {
+            const row = queuedRows.shift();
+            return row ? [{ plan_overrides: row.plan_overrides }] : [];
+          }),
+        })),
+      })),
+    })),
+    update: jest.fn(() => ({
+      set: jest.fn(() => ({
+        where: jest.fn(() => Promise.resolve()),
+      })),
+    })),
+  };
+
+  return {
+    transaction: async (cb: (tx: typeof tx) => Promise<unknown>) => cb(tx),
+  };
+}
+
+type MockTx = typeof createMockDb extends (rows: Array<{ plan_overrides: string | null }>) => infer R
+  ? R extends { transaction: (cb: (tx: infer T) => Promise<unknown>) => Promise<unknown> }
+    ? T
+    : never
+  : never;
+
+type MockDb = {
+  transaction: (cb: (tx: MockTx) => Promise<unknown>) => Promise<unknown>;
+};
+
+function buildApp(db: MockDb) {
   const app = express();
   app.use(express.json());
   app.use((req, res, next) => {
@@ -15,129 +50,79 @@ function buildApp() {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    res.locals.adminActor = 'admin-test';
+    res.locals.adminActor = 'admin-api-key';
     next();
   });
-  app.use('/api/admin/quota/requests', createAdminQuotaBulkRouter({ updateOverrides: noopUpdateOverrides }));
+  app.use('/api/admin/quotas', createAdminQuotaBulkRouter({ db }));
   app.use(errorHandler);
   return app;
 }
 
-describe('POST /api/admin/quota/requests/bulk-update', () => {
-  let store: QuotaRequestStore;
+describe('POST /api/admin/quotas/bulk-update', () => {
+  it('updates plan overrides for multiple developers atomically', async () => {
+    const db = createMockDb([
+      { plan_overrides: JSON.stringify({ plan_tier: 'free', monthly_call_limit: 50000 }) },
+      { plan_overrides: JSON.stringify({ plan_tier: 'free', rate_limit_max_requests: 1000 }) },
+    ]);
+    const app = buildApp(db);
 
-  beforeEach(() => {
-    store = new InMemoryQuotaRequestStore();
-    setQuotaRequestStore(store);
-  });
-
-  it('approves multiple requests', async () => {
-    const r1 = await createQuotaRequest({ developerId: 'dev-1', requestedTier: 'pro', reason: 'test' });
-    const r2 = await createQuotaRequest({ developerId: 'dev-2', requestedTier: 'enterprise', reason: 'test' });
-
-    const app = buildApp();
-    const res = await request(app)
-      .post('/api/admin/quota/requests/bulk-update')
+    const response = await request(app)
+      .post('/api/admin/quotas/bulk-update')
       .set('x-admin-api-key', ADMIN_KEY)
       .send({
-        operations: [
-          { request_id: r1.id, action: 'approve', admin_notes: 'Approved' },
-          { request_id: r2.id, action: 'approve' },
+        items: [
+          { developer_id: 'dev-1', plan_tier: 'pro', monthly_call_limit: 100000 },
+          { developer_id: 'dev-2', plan_tier: 'enterprise', rate_limit_max_requests: 5000 },
         ],
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.summary).toEqual({ total: 2, succeeded: 2, failed: 0 });
-    expect(res.body.data.results).toHaveLength(2);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ updated: 2 });
   });
 
-  it('rejects multiple requests', async () => {
-    const r1 = await createQuotaRequest({ developerId: 'dev-1', requestedTier: 'pro', reason: 'test' });
-    const r2 = await createQuotaRequest({ developerId: 'dev-2', requestedTier: 'free', reason: 'test' });
+  it('rejects requests with invalid items', async () => {
+    const db = createMockDb([]);
+    const app = buildApp(db);
 
-    const app = buildApp();
-    const res = await request(app)
-      .post('/api/admin/quota/requests/bulk-update')
+    const response = await request(app)
+      .post('/api/admin/quotas/bulk-update')
+      .set('x-admin-api-key', ADMIN_KEY)
+      .send({ items: [] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(response.body.error.details[0].field).toBe('body.items');
+  });
+
+  it('returns 404 when a developer does not exist', async () => {
+    const db = createMockDb([]);
+    const app = buildApp(db);
+
+    const response = await request(app)
+      .post('/api/admin/quotas/bulk-update')
       .set('x-admin-api-key', ADMIN_KEY)
       .send({
-        operations: [
-          { request_id: r1.id, action: 'reject' },
-          { request_id: r2.id, action: 'reject', admin_notes: 'No thanks' },
+        items: [
+          { developer_id: 'missing-dev', plan_tier: 'pro' },
         ],
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.summary).toEqual({ total: 2, succeeded: 2, failed: 0 });
-  });
-
-  it('returns 400 when any request fails validation', async () => {
-    const r1 = await createQuotaRequest({ developerId: 'dev-1', requestedTier: 'pro', reason: 'test' });
-
-    const app = buildApp();
-    const res = await request(app)
-      .post('/api/admin/quota/requests/bulk-update')
-      .set('x-admin-api-key', ADMIN_KEY)
-      .send({
-        operations: [
-          { request_id: r1.id, action: 'approve' },
-          { request_id: 'nonexistent', action: 'approve' },
-        ],
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('BULK_QUOTA_UPDATE_FAILED');
-    expect(res.body.error.details).toHaveLength(1);
-    expect(res.body.error.details[0].requestId).toBe('nonexistent');
-  });
-
-  it('returns 400 when body operations array is empty', async () => {
-    const app = buildApp();
-    const res = await request(app)
-      .post('/api/admin/quota/requests/bulk-update')
-      .set('x-admin-api-key', ADMIN_KEY)
-      .send({ operations: [] });
-
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
-  });
-
-  it('returns 400 when operation has invalid action', async () => {
-    const app = buildApp();
-    const res = await request(app)
-      .post('/api/admin/quota/requests/bulk-update')
-      .set('x-admin-api-key', ADMIN_KEY)
-      .send({
-        operations: [{ request_id: 'some-id', action: 'destroy' }],
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
-  });
-
-  it('returns 400 when request_id is empty', async () => {
-    const app = buildApp();
-    const res = await request(app)
-      .post('/api/admin/quota/requests/bulk-update')
-      .set('x-admin-api-key', ADMIN_KEY)
-      .send({
-        operations: [{ request_id: '', action: 'approve' }],
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('NOT_FOUND');
   });
 
   it('requires admin authentication', async () => {
-    const app = buildApp();
-    const res = await request(app)
-      .post('/api/admin/quota/requests/bulk-update')
+    const db = createMockDb([]);
+    const app = buildApp(db);
+
+    const response = await request(app)
+      .post('/api/admin/quotas/bulk-update')
       .send({
-        operations: [{ request_id: 'some-id', action: 'approve' }],
+        items: [
+          { developer_id: 'dev-1', plan_tier: 'pro' },
+        ],
       });
 
-    expect(res.status).toBe(401);
+    expect(response.status).toBe(401);
   });
 });
