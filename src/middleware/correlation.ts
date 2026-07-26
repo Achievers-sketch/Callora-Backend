@@ -1,45 +1,42 @@
 import type { Request, Response, NextFunction } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { sanitizeRequestId, REQUEST_ID_MAX_LENGTH } from './requestId.js';
-import { getCorrelationId, setCorrelationId } from '../utils/asyncContext.js';
+import { randomUUID } from 'node:crypto';
+import { getRequestId } from '../utils/asyncContext.js';
 
-const CORRELATION_ID_HEADER = 'x-correlation-id';
+export const CORRELATION_ID_HEADER = 'x-correlation-id';
+export const CORRELATION_ID_MAX_LENGTH = 256;
 
-/**
- * Maximum byte length accepted for a client-supplied X-Correlation-Id value.
- */
-export const CORRELATION_ID_MAX_LENGTH = REQUEST_ID_MAX_LENGTH;
+export const sanitizeCorrelationId = (raw: string | undefined): string | undefined => {
+  if (!raw) return undefined;
+  const sanitized = raw.replace(/[\x00-\x1F\x7F]/g, '').trim();
+  if (!sanitized.length || sanitized.length > CORRELATION_ID_MAX_LENGTH) return undefined;
+  return sanitized;
+};
 
-/**
- * Sanitise a raw X-Correlation-Id header value.
- * Reuses the same sanitisation logic as X-Request-Id.
- */
-export const sanitizeCorrelationId = sanitizeRequestId;
+export const getCorrelationId = (): string | undefined => getRequestId();
 
-/**
- * Global middleware that propagates X-Correlation-Id across every request.
- * - Reads an incoming x-correlation-id header (sanitised) or generates a fresh UUID v4.
- * - Sets the X-Correlation-Id response header so clients always get a correlation token.
- * - Populates req.correlationId for downstream middleware and error handlers.
- * - Stores the correlationId in the existing AsyncLocalStorage context so it is
- *   available everywhere without passing it through arguments.
- */
 export const correlationMiddleware = (
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
   const raw = req.header(CORRELATION_ID_HEADER);
-  const correlationId = sanitizeCorrelationId(raw) ?? uuidv4();
+  const correlationId = sanitizeCorrelationId(raw) ?? req.id ?? randomUUID();
 
-  (req as Request & { correlationId?: string }).correlationId = correlationId;
+  req.correlationId = correlationId;
   res.setHeader('X-Correlation-Id', correlationId);
-
-  // Also store in async context so downstream services can retrieve it
-  // via getCorrelationId() without plumbing through function arguments.
-  setCorrelationId(correlationId);
 
   next();
 };
 
-export { getCorrelationId };
+export interface OutboundHeaders {
+  'X-Correlation-Id': string;
+  'X-Request-Id'?: string;
+}
+
+export const buildOutboundCorrelationHeaders = (): OutboundHeaders => {
+  const correlationId = getCorrelationId();
+  return {
+    'X-Correlation-Id': correlationId ?? randomUUID(),
+    ...(correlationId ? { 'X-Request-Id': correlationId } : {}),
+  };
+};
