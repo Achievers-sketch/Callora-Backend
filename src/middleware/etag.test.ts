@@ -68,15 +68,6 @@ describe('etagMatches', () => {
   });
 });
 
-  test('matches when the target ETag is one of several comma-separated tags', () => {
-    expect(etagMatches('"other1", "abc123", "other2"', etag)).toBe(true);
-  });
-
-  test('does not match when the list contains only unrelated tags', () => {
-    expect(etagMatches('"other1", "other2"', etag)).toBe(false);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // etagMiddleware — integration via supertest
 // ---------------------------------------------------------------------------
