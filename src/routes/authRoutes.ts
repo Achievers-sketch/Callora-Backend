@@ -4,30 +4,22 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { bodyValidator } from '../middleware/validate.js';
 import { createLoginThrottle } from '../middleware/loginThrottle.js';
 import { createTimeoutMiddleware } from '../middleware/timeout.js';
+import { refreshTokenHistogramMiddleware } from '../middleware/metricsHistogram.js';
 import { config } from '../config/index.js';
-import { z } from 'zod';
+import { walletLoginSchema, refreshTokenSchema } from '../validators/auth.js';
 
 const authTimeout = createTimeoutMiddleware({ timeoutMs: config.authTimeoutMs });
 
-const refreshTokenSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required')
-});
-
-// Login throttle with proxy support for accurate IP detection behind load balancers
-const loginThrottle = createLoginThrottle({
-  windowMs: config.loginRateLimit.windowMs,
-  maxRequests: config.loginRateLimit.maxRequests,
-  trustProxy: process.env.TRUST_PROXY_HEADERS === 'true',
-});
-
-const walletLoginSchema = z.object({
-  walletAddress: z.string().min(1, 'Wallet address is required'),
-  signature: z.string().min(1, 'Signature is required'),
-  message: z.string().min(1, 'Message is required'),
-});
-
 export function createAuthRoutes(authController: AuthController): Router {
   const router = Router();
+
+  // Each router instance gets its own login throttle so that test-app instances
+  // do not share a single rate-limit bucket across test suites.
+  const loginThrottle = createLoginThrottle({
+    windowMs: config.loginRateLimit.windowMs,
+    maxRequests: config.loginRateLimit.maxRequests,
+    trustProxy: process.env.TRUST_PROXY_HEADERS === 'true',
+  });
 
   // Apply graceful per-request timeout to all auth routes.
   // If a request exceeds the timeout the middleware sends a 504 Gateway
@@ -43,27 +35,27 @@ export function createAuthRoutes(authController: AuthController): Router {
     (req, res, next) => authController.walletLogin(req, res, next)
   );
 
-  // Refresh access token
-  router.post('/refresh', 
+  // POST /auth/refresh - Refresh access token using a valid refresh token
+  router.post('/refresh',
     refreshTokenHistogramMiddleware,
     bodyValidator(refreshTokenSchema),
     (req, res, next) => authController.refreshToken(req, res, next)
   );
 
-  // Revoke a specific refresh token
-  router.post('/revoke', 
+  // POST /auth/revoke - Revoke a specific refresh token
+  router.post('/revoke',
     bodyValidator(refreshTokenSchema),
     (req, res, next) => authController.revokeToken(req, res, next)
   );
 
-  // Revoke all refresh tokens for authenticated user
-  router.post('/revoke-all', 
+  // POST /auth/revoke-all - Revoke all refresh tokens for authenticated user
+  router.post('/revoke-all',
     requireAuth,
     (req, res, next) => authController.revokeAllTokens(req, res, next)
   );
 
-  // Get token information for authenticated user
-  router.get('/tokens', 
+  // GET /auth/tokens - Get token information for authenticated user
+  router.get('/tokens',
     requireAuth,
     (req, res, next) => authController.getTokenInfo(req, res, next)
   );
