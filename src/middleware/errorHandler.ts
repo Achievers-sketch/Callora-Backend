@@ -15,6 +15,9 @@ export interface ErrorResponseBody {
   details?: ValidationErrorDetail[];
 }
 
+import { errorEnvelope } from '../lib/envelope.js';
+import type { ErrorEnvelope } from '../types/ResponseEnvelope.js';
+
 function extractValidationDetails(err: unknown): ValidationErrorDetail[] | undefined {
   if (err instanceof ValidationError) {
     return err.details;
@@ -103,14 +106,8 @@ export function errorHandler(
     finalMessage = 'Internal server error';
   }
 
-  // Build error envelope with optional validation details
   const details = extractValidationDetails(err);
-  const body: ErrorEnvelope = errorEnvelope(
-    code,
-    finalMessage,
-    requestId,
-    details,
-  );
+  const body = buildErrorEnvelope(code, finalMessage, requestId, details);
 
   if (!res.headersSent) {
     res.status(statusCode).json(body);

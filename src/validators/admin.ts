@@ -185,6 +185,56 @@ export const usageByEndpointQuerySchema = z.object({
 export type UsageByEndpointQuery = z.infer<typeof usageByEndpointQuerySchema>;
 
 // ---------------------------------------------------------------------------
+// GET /api/admin/usage/spike
+// ---------------------------------------------------------------------------
+
+/**
+ * Query params for GET /api/admin/usage/spike.
+ *
+ * Identical in shape to {@link usageAnomaliesQuerySchema} — both endpoints
+ * accept the same filtering parameters (window, threshold, limit, apiId).
+ * The difference is in the detection algorithm: anomalies flags both positive
+ * (spike) and negative (drop) z-score deviations, while spike only flags
+ * positive z-score deviations and includes a `percentageChange` field.
+ */
+export const spikeQuerySchema = z.object({
+  /** ISO-8601 start of the reporting window (optional). */
+  from: isoDateString.optional(),
+  /** ISO-8601 end of the reporting window (optional). */
+  to: isoDateString.optional(),
+  /**
+   * Z-score threshold that classifies a data point as a spike.
+   * Accepts a decimal string between 1 and 10.
+   */
+  threshold: z
+    .string()
+    .optional()
+    .refine((v) => {
+      if (v === undefined) return true;
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 1 && n <= 10;
+    }, { message: 'threshold must be a number between 1 and 10' })
+    .transform((v) => (v !== undefined ? Number(v) : undefined)),
+  /**
+   * Maximum number of spikes to return.
+   * Must be an integer between 1 and 1000.
+   */
+  limit: z
+    .string()
+    .optional()
+    .refine((v) => {
+      if (v === undefined) return true;
+      const n = Number(v);
+      return Number.isFinite(n) && Number.isInteger(n) && n >= 1 && n <= 1000;
+    }, { message: 'limit must be an integer between 1 and 1000' })
+    .transform((v) => (v !== undefined ? Number(v) : undefined)),
+  /** Filter to a specific API (optional). */
+  apiId: singleStringParam.optional(),
+});
+
+export type SpikeQuery = z.infer<typeof spikeQuerySchema>;
+
+// ---------------------------------------------------------------------------
 // POST /api/admin/db/explain
 // ---------------------------------------------------------------------------
 
