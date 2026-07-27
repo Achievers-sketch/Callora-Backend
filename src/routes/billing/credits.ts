@@ -8,6 +8,7 @@ import { validate } from '../../middleware/validate.js';
 import { defaultCreditsRepository, type CreditsRepository } from '../../repositories/creditsRepository.js';
 import { logger } from '../../logger.js';
 import { TokenBucketRateLimiter, createTokenBucketRateLimitMiddleware } from '../../middleware/rateLimit.js';
+import { creditsHistogramMiddleware } from '../../middleware/creditsHistogram.js';
 
 const router = Router();
 
