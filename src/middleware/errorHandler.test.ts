@@ -152,10 +152,14 @@ describe('Error Handler', () => {
     );
 
     expect(mockRes.status).toHaveBeenCalledWith(422);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      message: 'Custom error',
+    const call = (mockRes.json as jest.Mock).mock.calls[0][0];
+    expect(call).toMatchObject({
+      success: false,
+      requestId: 'test-request-id',
+    });
+    expect(call.error).toMatchObject({
       code: 'UNPROCESSABLE_ENTITY',
-      requestId: 'test-request-id'
+      message: 'Custom error',
     });
   });
 
