@@ -536,6 +536,147 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UsageResponse"
+                },
+                "examples": {
+                  "withEvents": {
+                    "summary": "Typical response with two usage events",
+                    "value": {
+                      "events": [
+                        {
+                          "id": "evt_01hx9r2k3m4n5p6q7r8s9t0u",
+                          "apiId": "api_weather_v1",
+                          "endpoint": "/v1/weather/current",
+                          "occurredAt": "2026-07-01T14:32:00.000Z",
+                          "revenue": "1000000"
+                        },
+                        {
+                          "id": "evt_01hx9r2k3m4n5p6q7r8s9t0v",
+                          "apiId": "api_weather_v1",
+                          "endpoint": "/v1/weather/forecast",
+                          "occurredAt": "2026-07-01T14:45:00.000Z",
+                          "revenue": "1000000"
+                        }
+                      ],
+                      "stats": {
+                        "totalCalls": 2,
+                        "totalSpent": "2000000",
+                        "breakdownByApi": [
+                          {
+                            "apiId": "api_weather_v1",
+                            "calls": 2,
+                            "revenue": "2000000"
+                          }
+                        ]
+                      },
+                      "period": {
+                        "from": "2026-06-01T00:00:00.000Z",
+                        "to": "2026-07-01T00:00:00.000Z"
+                      },
+                      "pagination": {
+                        "limit": 20,
+                        "offset": 0,
+                        "hasMore": false
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t0w"
+                    }
+                  },
+                  "withBuckets": {
+                    "summary": "Response with daily call buckets (groupBy=day)",
+                    "value": {
+                      "events": [
+                        {
+                          "id": "evt_01hx9r2k3m4n5p6q7r8s9t0x",
+                          "apiId": "api_maps_v2",
+                          "endpoint": "/v2/geocode",
+                          "occurredAt": "2026-07-10T09:15:00.000Z",
+                          "revenue": "500000"
+                        }
+                      ],
+                      "stats": {
+                        "totalCalls": 1,
+                        "totalSpent": "500000",
+                        "breakdownByApi": [
+                          {
+                            "apiId": "api_maps_v2",
+                            "calls": 1,
+                            "revenue": "500000"
+                          }
+                        ],
+                        "buckets": [
+                          {
+                            "period": "2026-07-10",
+                            "calls": 1,
+                            "revenue": "500000"
+                          }
+                        ]
+                      },
+                      "period": {
+                        "from": "2026-07-10T00:00:00.000Z",
+                        "to": "2026-07-11T00:00:00.000Z"
+                      },
+                      "pagination": {
+                        "limit": 20,
+                        "offset": 0,
+                        "hasMore": false
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t0y"
+                    }
+                  },
+                  "empty": {
+                    "summary": "No events in the requested period",
+                    "value": {
+                      "events": [],
+                      "stats": {
+                        "totalCalls": 0,
+                        "totalSpent": "0",
+                        "breakdownByApi": []
+                      },
+                      "period": {
+                        "from": "2026-06-01T00:00:00.000Z",
+                        "to": "2026-07-01T00:00:00.000Z"
+                      },
+                      "pagination": {
+                        "limit": 20,
+                        "offset": 0,
+                        "hasMore": false
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t0z"
+                    }
+                  },
+                  "withCursorPagination": {
+                    "summary": "Cursor-paginated response (more pages available)",
+                    "value": {
+                      "events": [
+                        {
+                          "id": "evt_01hx9r2k3m4n5p6q7r8s9t1a",
+                          "apiId": "api_translate_v1",
+                          "endpoint": "/v1/translate",
+                          "occurredAt": "2026-07-20T11:00:00.000Z",
+                          "revenue": "250000"
+                        }
+                      ],
+                      "stats": {
+                        "totalCalls": 1,
+                        "totalSpent": "250000",
+                        "breakdownByApi": [
+                          {
+                            "apiId": "api_translate_v1",
+                            "calls": 1,
+                            "revenue": "250000"
+                          }
+                        ]
+                      },
+                      "period": {
+                        "from": "2026-07-01T00:00:00.000Z",
+                        "to": "2026-07-31T00:00:00.000Z"
+                      },
+                      "pagination": {
+                        "limit": 1,
+                        "nextCursor": "eyJjcmVhdGVkX2F0IjoiMjAyNi0wNy0yMFQxMTowMDowMC4wMDBaIiwiaWQiOiJldnRfMDFoeDlyMmszbTRuNXA2cTdyOHM5dDF"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t1b"
+                    }
+                  }
                 }
               }
             }
@@ -546,6 +687,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidDateRange": {
+                    "summary": "from date is after to date",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "'from' date must be before or equal to 'to' date",
+                        "details": [
+                          {
+                            "field": "from",
+                            "message": "'from' date must be before or equal to 'to' date",
+                            "code": "custom"
+                          }
+                        ]
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t1c",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  },
+                  "invalidGroupBy": {
+                    "summary": "Invalid groupBy value",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Invalid enum value. Expected 'day' | 'week' | 'month'",
+                        "details": [
+                          {
+                            "field": "groupBy",
+                            "message": "Invalid enum value. Expected 'day' | 'week' | 'month'",
+                            "code": "invalid_enum_value"
+                          }
+                        ]
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t1d",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  },
+                  "invalidCursor": {
+                    "summary": "Malformed cursor value",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "BAD_REQUEST",
+                        "message": "Invalid cursor format. Cursor must be base64 encoded (created_at, id).",
+                        "details": []
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t1e",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  }
                 }
               }
             }
@@ -556,6 +750,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingToken": {
+                    "summary": "No authorization token provided",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Unauthorized"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t1f",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  },
+                  "expiredToken": {
+                    "summary": "JWT token has expired",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Token expired"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t1g",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  }
                 }
               }
             }
@@ -566,6 +786,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "internalError": {
+                    "summary": "Unexpected server error",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "Internal server error"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t1h",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  }
                 }
               }
             }
@@ -589,6 +823,16 @@
               "text/event-stream": {
                 "schema": {
                   "type": "string"
+                },
+                "examples": {
+                  "connected": {
+                    "summary": "Initial connected event sent on stream open",
+                    "value": "event: connected\ndata: {\"status\":\"connected\"}\n\n"
+                  },
+                  "usageEvent": {
+                    "summary": "Live usage event pushed to the stream",
+                    "value": "event: usage\ndata: {\"id\":\"evt_01hx9r2k3m4n5p6q7r8s9t2a\",\"apiId\":\"api_weather_v1\",\"endpoint\":\"/v1/weather/current\",\"occurredAt\":\"2026-07-01T14:32:00.000Z\",\"revenue\":\"1000000\"}\n\n"
+                  }
                 }
               }
             }
@@ -599,6 +843,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingToken": {
+                    "summary": "No authorization token provided",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Unauthorized"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t2b",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  }
                 }
               }
             }
@@ -716,22 +974,53 @@
                     }
                   }
                 },
-                "example": {
-                  "data": [
-                    {
-                      "endpoint": "/v1/weather/current",
-                      "calls": 142,
-                      "revenue": "142000"
-                    },
-                    {
-                      "endpoint": "/v1/weather/forecast",
-                      "calls": 87,
-                      "revenue": "87000"
+                "examples": {
+                  "topEndpoints": {
+                    "summary": "Two most-called endpoints in the period",
+                    "value": {
+                      "data": [
+                        {
+                          "endpoint": "/v1/weather/current",
+                          "calls": 142,
+                          "revenue": "142000"
+                        },
+                        {
+                          "endpoint": "/v1/weather/forecast",
+                          "calls": 87,
+                          "revenue": "87000"
+                        }
+                      ],
+                      "period": {
+                        "from": "2026-06-01T00:00:00.000Z",
+                        "to": "2026-07-01T00:00:00.000Z"
+                      }
                     }
-                  ],
-                  "period": {
-                    "from": "2026-06-01T00:00:00.000Z",
-                    "to": "2026-07-01T00:00:00.000Z"
+                  },
+                  "filteredByApi": {
+                    "summary": "Top endpoints filtered to a single API",
+                    "value": {
+                      "data": [
+                        {
+                          "endpoint": "/v2/geocode",
+                          "calls": 310,
+                          "revenue": "310000"
+                        }
+                      ],
+                      "period": {
+                        "from": "2026-07-01T00:00:00.000Z",
+                        "to": "2026-07-27T00:00:00.000Z"
+                      }
+                    }
+                  },
+                  "empty": {
+                    "summary": "No calls in the requested period",
+                    "value": {
+                      "data": [],
+                      "period": {
+                        "from": "2026-01-01T00:00:00.000Z",
+                        "to": "2026-01-02T00:00:00.000Z"
+                      }
+                    }
                   }
                 }
               }
@@ -743,6 +1032,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidDateRange": {
+                    "summary": "from is after to",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "BAD_REQUEST",
+                        "message": "from must be before or equal to to"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t3a",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  },
+                  "invalidLimit": {
+                    "summary": "Non-positive limit value",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "BAD_REQUEST",
+                        "message": "limit must be a positive integer"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t3b",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  },
+                  "invalidDate": {
+                    "summary": "Malformed date string in from/to parameter",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "BAD_REQUEST",
+                        "message": "Invalid \"from\" date"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t3c",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  }
                 }
               }
             }
@@ -753,6 +1080,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingToken": {
+                    "summary": "No authorization token provided",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Unauthorized"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t3d",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  }
                 }
               }
             }
@@ -763,6 +1104,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "internalError": {
+                    "summary": "Unexpected server error",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "Internal server error"
+                      },
+                      "requestId": "req-01hx9r2k3m4n5p6q7r8s9t3e",
+                      "timestamp": "2026-07-01T10:00:00.000Z"
+                    }
+                  }
                 }
               }
             }
@@ -3536,20 +3891,25 @@
               ],
               "properties": {
                 "id": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Unique identifier for the usage event."
                 },
                 "apiId": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Identifier of the API that was called."
                 },
                 "endpoint": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "API endpoint path that was invoked."
                 },
                 "occurredAt": {
                   "type": "string",
-                  "format": "date-time"
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp when the call occurred."
                 },
                 "revenue": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Revenue generated by this event in smallest USDC units (string to avoid precision loss)."
                 }
               }
             }
@@ -3563,13 +3923,16 @@
             ],
             "properties": {
               "totalCalls": {
-                "type": "integer"
+                "type": "integer",
+                "description": "Total number of API calls in the period."
               },
               "totalSpent": {
-                "type": "string"
+                "type": "string",
+                "description": "Total spend in smallest USDC units (string to avoid precision loss)."
               },
               "breakdownByApi": {
                 "type": "array",
+                "description": "Per-API aggregated call count and revenue.",
                 "items": {
                   "type": "object",
                   "required": [
@@ -3592,6 +3955,7 @@
               },
               "buckets": {
                 "type": "array",
+                "description": "Time-bucketed aggregation (present when groupBy is supplied).",
                 "items": {
                   "type": "object",
                   "required": [
@@ -3601,7 +3965,8 @@
                   ],
                   "properties": {
                     "period": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Bucket label (e.g. YYYY-MM-DD for groupBy=day)."
                     },
                     "calls": {
                       "type": "integer"
@@ -3620,6 +3985,7 @@
               "from",
               "to"
             ],
+            "description": "The effective time range covered by this response.",
             "properties": {
               "from": {
                 "type": "string",
@@ -3630,6 +3996,32 @@
                 "format": "date-time"
               }
             }
+          },
+          "pagination": {
+            "type": "object",
+            "description": "Pagination metadata. Shape varies by pagination mode: offset pagination includes limit/offset/hasMore; cursor pagination includes limit/nextCursor.",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "description": "Page size used for this request."
+              },
+              "offset": {
+                "type": "integer",
+                "description": "Offset applied for this request (offset pagination only)."
+              },
+              "hasMore": {
+                "type": "boolean",
+                "description": "Whether additional pages exist."
+              },
+              "nextCursor": {
+                "type": "string",
+                "description": "Opaque base64 cursor to pass as the `cursor` query parameter for the next page (cursor pagination only)."
+              }
+            }
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Correlation ID for this request, propagated from the X-Request-Id header."
           }
         }
       },
