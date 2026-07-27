@@ -1,7 +1,7 @@
-import { describe, expect, test } from '@jest/globals';
-import { apiRegistrationSchema } from './apis.js';
+import { describe, expect, test } from "@jest/globals";
+import { apiRegistrationSchema } from "./apis.js";
 
-describe('apiRegistrationSchema', () => {
+describe("apiRegistrationSchema", () => {
   test("accepts a valid API registration payload", () => {
     const result = apiRegistrationSchema.safeParse({
       name: "Weather API",
