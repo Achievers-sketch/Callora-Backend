@@ -13,15 +13,22 @@ import {
   approveQuotaRequest,
   rejectQuotaRequest,
 } from '../services/quotaService.js';
+import { validate } from '../middleware/validate.js';
+import {
+  developerIdParamsSchema,
+  quotaRequestsQuerySchema,
+  quotaRequestIdParamsSchema,
+  quotaRequestActionBodySchema,
+} from '../validators/admin.js';
 import { createAdminQuotaBulkRouter } from './admin/quotas/bulk.js';
 import { createAdminWebhooksRouter } from './admin/webhooks.js';
 import { createAdminApisRouter } from './admin/apis.js';
 import { createAdminHealthProbesRouter } from './admin/health/probes.js';
 import { createAdminCreditGrantsRouter } from './admin/billing/credits/grant.js';
-import { createAdminQuotaBulkRouter } from './admin/quotas/bulk.js';
 import { createAdminUsageExportRouter } from './admin/usage/export.js';
 import { createAdminKeyConcurrencyRouter } from './admin/keys/concurrency.js';
 import { createAdminAuditRouter } from './admin/audit.js';
+import { createMaintenanceBannerRouter } from './admin/maintenance/banner.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 const usageStore: UsageAdminStore = createUsageStore();
