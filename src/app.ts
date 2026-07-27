@@ -5,6 +5,7 @@ import adminRouter from './routes/admin.js';
 import { createExplainRouter } from './routes/admin/explain.js';
 import { createUsageAnomaliesRouter } from './routes/admin/usage/anomalies.js';
 import { createAdminUsageByEndpointRouter } from './routes/admin/usage/by-endpoint.js';
+import { createSpikeRouter } from './routes/admin/usage/spike.js';
 import { createApiRouter } from './routes/index.js';
 import { createApisRouter } from './routes/apis.js';
 import { createPluginsRouter } from './routes/marketplace/plugins.js';
@@ -333,6 +334,7 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   // shadowed by adminRouter's `/usage/:developerId` route.
   app.use('/api/admin/usage/anomalies', createUsageAnomaliesRouter({ pool }));
   app.use('/api/admin/usage/by-endpoint', createAdminUsageByEndpointRouter({ pool }));
+  app.use('/api/admin/usage/spike', createSpikeRouter({ pool }));
   app.use('/api/admin', adminRouter);
   app.use('/api/admin/db/explain', createExplainRouter({ pool }));
 
