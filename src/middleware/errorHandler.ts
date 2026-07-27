@@ -3,7 +3,8 @@ import { isAppError } from '../errors/index.js';
 import { logger } from '../logger.js';
 import type { ValidationErrorDetail } from './validate.js';
 import { ValidationError } from './validate.js';
-import { buildErrorEnvelope, type ErrorEnvelope } from './envelope.js';
+import { errorEnvelope } from '../lib/envelope.js';
+import type { ErrorEnvelope } from '../types/ResponseEnvelope.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -16,8 +17,6 @@ export interface ErrorResponseBody {
 
 import { errorEnvelope } from '../lib/envelope.js';
 import type { ErrorEnvelope } from '../types/ResponseEnvelope.js';
-
-const isProduction = process.env.NODE_ENV === 'production';
 
 function extractValidationDetails(err: unknown): ValidationErrorDetail[] | undefined {
   if (err instanceof ValidationError) {
@@ -109,14 +108,6 @@ export function errorHandler(
 
   const details = extractValidationDetails(err);
   const body = buildErrorEnvelope(code, finalMessage, requestId, details);
-  // Build error envelope with optional validation details
-  const details = extractValidationDetails(err);
-  const body: ErrorEnvelope = errorEnvelope(
-    code,
-    finalMessage,
-    requestId,
-    details,
-  );
 
   if (!res.headersSent) {
     res.status(statusCode).json(body);

@@ -9,6 +9,18 @@ import { createApiRouter } from "./routes/index.js";
 import { createApisRouter } from "./routes/apis.js";
 import { createPluginsRouter } from "./routes/marketplace/plugins.js";
 import { pool } from "./db.js";
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import adminRouter from './routes/admin.js';
+import { createExplainRouter } from './routes/admin/explain.js';
+import { createUsageAnomaliesRouter } from './routes/admin/usage/anomalies.js';
+import { createAdminUsageByEndpointRouter } from './routes/admin/usage/by-endpoint.js';
+import { createSpikeRouter } from './routes/admin/usage/spike.js';
+import { createApiRouter } from './routes/index.js';
+import { createApisRouter } from './routes/apis.js';
+import { createPluginsRouter } from './routes/marketplace/plugins.js';
+import { pool } from './db.js';
 import {
   InMemoryUsageEventsRepository,
   type GroupBy,
@@ -378,6 +390,11 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
   );
   app.use("/api/admin", adminRouter);
   app.use("/api/admin/db/explain", createExplainRouter({ pool }));
+  app.use('/api/admin/usage/anomalies', createUsageAnomaliesRouter({ pool }));
+  app.use('/api/admin/usage/by-endpoint', createAdminUsageByEndpointRouter({ pool }));
+  app.use('/api/admin/usage/spike', createSpikeRouter({ pool }));
+  app.use('/api/admin', adminRouter);
+  app.use('/api/admin/db/explain', createExplainRouter({ pool }));
 
   // Quota self-service — developers submit requests, admins manage via /api/admin/quota/requests
   app.use("/api/quota/requests", quotaRequestsRouter);

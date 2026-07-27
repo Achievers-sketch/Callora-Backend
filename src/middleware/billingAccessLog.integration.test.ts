@@ -197,6 +197,64 @@ describe('billingAccessLogMiddleware integration', () => {
     }
   });
 
+  test('reports responseBytes matching the actual JSON response body size', async () => {
+    const infoSpy = jest.spyOn(billingLogger, 'info').mockImplementation(() => billingLogger);
+
+    try {
+      const app = express();
+      app.use(express.json());
+      app.use(billingAccessLogMiddleware);
+
+      const responseBody = { success: true, usageEventId: 'evt-123', stellarTxHash: 'tx-abc' };
+
+      app.post('/billing/deduct', (_req: Request, res: Response) => {
+        res.status(200).json(responseBody);
+      });
+
+      const res = await request(app)
+        .post('/billing/deduct')
+        .set('x-request-id', 'integration-size')
+        .send({ amountUsdc: '2.00' });
+
+      expect(res.status).toBe(200);
+      expect(infoSpy).toHaveBeenCalledTimes(1);
+      const payload = infoSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.responseBytes).toBe(Buffer.byteLength(JSON.stringify(responseBody)));
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
+  test('surfaces actor alongside userId when a developer is authenticated', async () => {
+    const infoSpy = jest.spyOn(billingLogger, 'info').mockImplementation(() => billingLogger);
+
+    try {
+      const app = express();
+      app.use(express.json());
+      app.use((req: Request, res: Response, next: NextFunction) => {
+        (res.locals as Record<string, unknown>).authenticatedUser = { id: 'dev-99' };
+        next();
+      });
+      app.use(billingAccessLogMiddleware);
+
+      app.get('/billing/request/:requestId', (req: Request, res: Response) => {
+        res.status(200).json({ success: true, requestId: req.params.requestId });
+      });
+
+      const res = await request(app)
+        .get('/billing/request/req-1')
+        .set('x-request-id', 'integration-actor');
+
+      expect(res.status).toBe(200);
+      expect(infoSpy).toHaveBeenCalledTimes(1);
+      expect(infoSpy.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ userId: 'dev-99', actor: 'dev-99' }),
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
   test('emits log even when response is not writableEnded (close event)', async () => {
     const infoSpy = jest.spyOn(billingLogger, 'info').mockImplementation(() => billingLogger);
 

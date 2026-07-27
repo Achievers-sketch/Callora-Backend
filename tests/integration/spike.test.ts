@@ -17,7 +17,7 @@ jest.mock('better-sqlite3', () => {
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 
-describe('Spike Route Timeout Integration Tests', () => {
+describe('Spike Route — Timeout (preserved)', () => {
   let app: any;
 
   beforeAll(() => {
@@ -59,5 +59,120 @@ describe('Spike Route Timeout Integration Tests', () => {
     expect(res.status).toBe(504);
     expect(res.body.code).toBe('GATEWAY_TIMEOUT');
     expect(res.body.message).toBe('Request timeout exceeded');
+  });
+});
+
+describe('Spike Route — Mutation Audit Logging (Integration)', () => {
+  let app: any;
+
+  beforeAll(() => {
+    app = createApp();
+  });
+
+  describe('POST /api/spike', () => {
+    it('creates a spike record and returns 201 with full payload', async () => {
+      const res = await request(app)
+        .post('/api/spike')
+        .send({ label: 'Test spike', severity: 'high' })
+        .set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({
+        label: 'Test spike',
+        severity: 'high',
+      });
+      expect(res.body.id).toBeDefined();
+      expect(res.body.createdAt).toBeDefined();
+      expect(res.body.updatedAt).toBeDefined();
+    });
+
+    it('rejects missing label with 400', async () => {
+      const res = await request(app)
+        .post('/api/spike')
+        .send({ severity: 'low' })
+        .set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects invalid severity with 400', async () => {
+      const res = await request(app)
+        .post('/api/spike')
+        .send({ label: 'Bad', severity: 'unknown' })
+        .set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('PUT /api/spike/:id', () => {
+    let createdId: string;
+
+    beforeEach(async () => {
+      const res = await request(app)
+        .post('/api/spike')
+        .send({ label: 'Before update', severity: 'low' })
+        .set('Content-Type', 'application/json');
+      createdId = res.body.id;
+    });
+
+    it('updates an existing spike record and returns 200', async () => {
+      const res = await request(app)
+        .put(`/api/spike/${createdId}`)
+        .send({ label: 'After update', severity: 'critical' })
+        .set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        id: createdId,
+        label: 'After update',
+        severity: 'critical',
+      });
+    });
+
+    it('returns 404 for non-existent record', async () => {
+      const res = await request(app)
+        .put('/api/spike/non-existent')
+        .send({ label: 'Nope', severity: 'low' })
+        .set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('DELETE /api/spike/:id', () => {
+    let createdId: string;
+
+    beforeEach(async () => {
+      const res = await request(app)
+        .post('/api/spike')
+        .send({ label: 'To delete', severity: 'medium' })
+        .set('Content-Type', 'application/json');
+      createdId = res.body.id;
+    });
+
+    it('deletes an existing spike record and returns 204', async () => {
+      const res = await request(app).delete(`/api/spike/${createdId}`);
+      expect(res.status).toBe(204);
+    });
+
+    it('returns 404 for non-existent record', async () => {
+      const res = await request(app).delete('/api/spike/non-existent');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/spike/records', () => {
+    it('returns created spike records', async () => {
+      await request(app)
+        .post('/api/spike')
+        .send({ label: 'List test', severity: 'high' })
+        .set('Content-Type', 'application/json');
+
+      const res = await request(app).get('/api/spike/records');
+      expect(res.status).toBe(200);
+      expect(res.body.records).toBeInstanceOf(Array);
+      expect(res.body.records.length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

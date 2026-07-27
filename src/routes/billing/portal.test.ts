@@ -523,6 +523,234 @@ describe('Billing Portal Routes', () => {
     });
   });
 
+  describe('GET /api/billing/portal/summary', () => {
+    it('returns 401 without auth', async () => {
+      const app = buildApp(prisma);
+      const res = await request(app).get('/api/billing/portal/summary');
+      expect(res.status).toBe(401);
+    });
+
+    it('returns zeroed summary when user has no invoices', async () => {
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/summary')
+        .set('x-user-id', 'empty-user');
+      expect(res.status).toBe(200);
+      expect(res.body.data.totalOutstanding).toBe('0');
+      expect(res.body.data.totalPaid).toBe('0');
+      expect(res.body.data.invoiceCount).toBe(0);
+      expect(res.body.data.currentBillingPeriod).toBeNull();
+      expect(res.body.data.lastPaymentDate).toBeNull();
+    });
+
+    it('computes outstanding and paid totals', async () => {
+      seedInvoice(prisma.__mockData, {
+        id: 'i1',
+        user_id: 'user-a',
+        status: 'pending',
+        total_amount_usdc: BigInt(100000000),
+        created_at: new Date('2026-01-01'),
+      });
+      seedInvoice(prisma.__mockData, {
+        id: 'i2',
+        user_id: 'user-a',
+        status: 'paid',
+        total_amount_usdc: BigInt(250000000),
+        created_at: new Date('2026-01-02'),
+      });
+      seedInvoice(prisma.__mockData, {
+        id: 'i3',
+        user_id: 'user-a',
+        status: 'paid',
+        total_amount_usdc: BigInt(50000000),
+        created_at: new Date('2026-01-03'),
+      });
+
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/summary')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(200);
+      expect(res.body.data.totalOutstanding).toBe('100000000');
+      expect(res.body.data.totalPaid).toBe('300000000');
+      expect(res.body.data.invoiceCount).toBe(3);
+    });
+
+    it('returns current billing period from most recent invoice', async () => {
+      seedInvoice(prisma.__mockData, {
+        id: 'i1',
+        user_id: 'user-a',
+        period_start: new Date('2026-01-01'),
+        period_end: new Date('2026-01-31'),
+        created_at: new Date('2026-01-01'),
+      });
+      seedInvoice(prisma.__mockData, {
+        id: 'i2',
+        user_id: 'user-a',
+        period_start: new Date('2026-02-01'),
+        period_end: new Date('2026-02-28'),
+        created_at: new Date('2026-02-01'),
+      });
+
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/summary')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(200);
+      expect(res.body.data.currentBillingPeriod.start).toBe('2026-02-01T00:00:00.000Z');
+      expect(res.body.data.currentBillingPeriod.end).toBe('2026-02-28T00:00:00.000Z');
+    });
+
+    it('returns last payment date from most recent paid invoice', async () => {
+      seedInvoice(prisma.__mockData, {
+        id: 'i1',
+        user_id: 'user-a',
+        status: 'paid',
+        created_at: new Date('2026-01-15'),
+      });
+      seedInvoice(prisma.__mockData, {
+        id: 'i2',
+        user_id: 'user-a',
+        status: 'paid',
+        created_at: new Date('2026-02-15'),
+      });
+
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/summary')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(200);
+      expect(res.body.data.lastPaymentDate).toBe('2026-02-15T00:00:00.000Z');
+    });
+
+    it('does not count invoices from other users', async () => {
+      seedInvoice(prisma.__mockData, {
+        id: 'i1',
+        user_id: 'user-a',
+        status: 'pending',
+        total_amount_usdc: BigInt(100),
+      });
+      seedInvoice(prisma.__mockData, {
+        id: 'i2',
+        user_id: 'user-b',
+        status: 'pending',
+        total_amount_usdc: BigInt(999),
+      });
+
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/summary')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(200);
+      expect(res.body.data.totalOutstanding).toBe('100');
+      expect(res.body.data.invoiceCount).toBe(1);
+    });
+  });
+
+  describe('GET /api/billing/portal/invoices/:id', () => {
+    it('returns 401 without auth', async () => {
+      const app = buildApp(prisma);
+      const res = await request(app).get(
+        '/api/billing/portal/invoices/00000000-0000-0000-0000-000000000001',
+      );
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 404 for non-existent invoice', async () => {
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/invoices/00000000-0000-0000-0000-000000000099')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 404 for invoice belonging to another user', async () => {
+      seedInvoice(prisma.__mockData, {
+        id: '00000000-0000-0000-0000-000000000002',
+        user_id: 'user-b',
+      });
+
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/invoices/00000000-0000-0000-0000-000000000002')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(404);
+    });
+
+    it('returns invoice with line items', async () => {
+      const li = [
+        {
+          id: '00000000-0000-0000-0000-000000000010',
+          invoice_id: '00000000-0000-0000-0000-000000000001',
+          description: 'API calls',
+          amount_usdc: 25.0,
+          quantity: 5,
+          unit_price_usdc: 5.0,
+          item_type: 'usage',
+          created_at: new Date(),
+        },
+        {
+          id: '00000000-0000-0000-0000-000000000011',
+          invoice_id: '00000000-0000-0000-0000-000000000001',
+          description: 'Storage fee',
+          amount_usdc: 10.0,
+          quantity: 1,
+          unit_price_usdc: 10.0,
+          item_type: 'fee',
+          created_at: new Date(),
+        },
+      ];
+
+      seedInvoice(prisma.__mockData, {
+        id: '00000000-0000-0000-0000-000000000001',
+        user_id: 'user-a',
+        invoice_number: 'INV-001',
+        status: 'pending',
+        total_amount_usdc: BigInt(35000000),
+        line_items: li,
+      });
+
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/invoices/00000000-0000-0000-0000-000000000001')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(200);
+      expect(res.body.data.id).toBe('00000000-0000-0000-0000-000000000001');
+      expect(res.body.data.invoiceNumber).toBe('INV-001');
+      expect(res.body.data.status).toBe('pending');
+      expect(res.body.data.lineItems).toHaveLength(2);
+      expect(res.body.data.lineItems[0].description).toBe('API calls');
+      expect(res.body.data.lineItems[0].amountUsdc).toBe('25');
+      expect(res.body.data.lineItems[1].description).toBe('Storage fee');
+      expect(res.body.data.lineItems[1].itemType).toBe('fee');
+    });
+
+    it('returns invoice with empty line items', async () => {
+      seedInvoice(prisma.__mockData, {
+        id: '00000000-0000-0000-0000-000000000003',
+        user_id: 'user-a',
+        invoice_number: 'INV-003',
+        line_items: [],
+      });
+
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/invoices/00000000-0000-0000-0000-000000000003')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(200);
+      expect(res.body.data.id).toBe('00000000-0000-0000-0000-000000000003');
+      expect(res.body.data.lineItems).toEqual([]);
+    });
+
+    it('rejects malformed invoice id', async () => {
+      const app = buildApp(prisma);
+      const res = await request(app)
+        .get('/api/billing/portal/invoices/not-a-uuid')
+        .set('x-user-id', 'user-a');
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('Validation edge cases', () => {
     it('rejects malformed invoice id', async () => {
       const app = buildApp(prisma);

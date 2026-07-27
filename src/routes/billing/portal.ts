@@ -104,6 +104,136 @@ export function createBillingPortalRouter(prisma: PrismaClient = defaultPrisma a
   }
 
   /**
+   * GET /api/billing/portal/summary
+   *
+   * Returns an aggregate billing summary for the authenticated developer:
+   *   - totalOutstanding: sum of total_amount_usdc for pending invoices
+   *   - totalPaid: sum of total_amount_usdc for paid invoices
+   *   - currentBillingPeriod: { start, end } from the most recent invoice
+   *   - lastPaymentDate: created_at of the most recent paid invoice
+   *   - invoiceCount: total number of invoices
+   */
+  router.get(
+    '/summary',
+    requireAuth,
+    async (
+      req: Request,
+      res: Response<unknown, AuthenticatedLocals>,
+      next: NextFunction,
+    ) => {
+      try {
+        const user = res.locals.authenticatedUser;
+        if (!user) {
+          res.status(401).json({ error: 'Unauthorized' });
+          return;
+        }
+
+        const [pendingInvoices, paidInvoices, latestInvoice] = await Promise.all([
+          prisma.invoice.findMany({
+            where: { user_id: user.id, status: 'pending' },
+            select: { total_amount_usdc: true },
+          }),
+          prisma.invoice.findMany({
+            where: { user_id: user.id, status: 'paid' },
+            select: { total_amount_usdc: true, created_at: true },
+            orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+            take: 1,
+          }),
+          prisma.invoice.findMany({
+            where: { user_id: user.id },
+            select: { period_start: true, period_end: true, created_at: true },
+            orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+            take: 1,
+          }),
+        ]);
+
+        const totalOutstanding = pendingInvoices.reduce(
+          (sum, inv) => sum + inv.total_amount_usdc,
+          BigInt(0),
+        );
+
+        const totalPaid = paidInvoices.reduce(
+          (sum, inv) => sum + inv.total_amount_usdc,
+          BigInt(0),
+        );
+
+        const allInvoices = await prisma.invoice.findMany({
+          where: { user_id: user.id },
+          select: { id: true },
+        });
+
+        res.json({
+          data: {
+            totalOutstanding: totalOutstanding.toString(),
+            totalPaid: totalPaid.toString(),
+            currentBillingPeriod: latestInvoice.length > 0
+              ? {
+                  start: latestInvoice[0].period_start?.toISOString() ?? null,
+                  end: latestInvoice[0].period_end?.toISOString() ?? null,
+                }
+              : null,
+            lastPaymentDate: paidInvoices.length > 0
+              ? paidInvoices[0].created_at.toISOString()
+              : null,
+            invoiceCount: allInvoices.length,
+          },
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  /**
+   * GET /api/billing/portal/invoices/:id
+   *
+   * Retrieve a single invoice with its line items in one call.
+   */
+  router.get(
+    '/invoices/:id',
+    requireAuth,
+    validate({ params: invoiceParamsSchema }),
+    async (
+      req: Request,
+      res: Response<unknown, AuthenticatedLocals>,
+      next: NextFunction,
+    ) => {
+      try {
+        const user = res.locals.authenticatedUser;
+        if (!user) {
+          res.status(401).json({ error: 'Unauthorized' });
+          return;
+        }
+
+        const invoice = await getPrismaInvoice(req.params.id, user.id);
+        if (!invoice) {
+          throw new NotFoundError('Invoice not found');
+        }
+
+        const lineItems = (invoice.line_items ?? []).map((item: PrismaInvoiceLineItem) => ({
+          id: item.id,
+          invoiceId: item.invoice_id,
+          description: item.description,
+          amountUsdc: item.amount_usdc.toString(),
+          quantity: item.quantity,
+          unitPriceUsdc: item.unit_price_usdc.toString(),
+          itemType: item.item_type,
+          createdAt: item.created_at.toISOString(),
+        }));
+
+        res.json({
+          data: {
+            ...invoiceToResponse(invoice),
+            lineItems,
+          },
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  /**
    * GET /api/billing/portal/invoices
    *
    * List invoices for the authenticated user with cursor-based pagination.
