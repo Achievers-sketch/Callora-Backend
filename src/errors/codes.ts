@@ -243,9 +243,6 @@ export const ErrorCode = {
   /** Quota request is invalid */
   INVALID_QUOTA_REQUEST: "INVALID_QUOTA_REQUEST",
 
-  /** Bulk quota update failed */
-  BULK_QUOTA_UPDATE_FAILED: "BULK_QUOTA_UPDATE_FAILED",
-
   /** Request timeout */
   REQUEST_TIMEOUT: "REQUEST_TIMEOUT",
 

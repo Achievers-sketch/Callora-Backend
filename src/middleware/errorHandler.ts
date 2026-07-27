@@ -3,17 +3,11 @@ import { isAppError } from '../errors/index.js';
 import { logger } from '../logger.js';
 import type { ValidationErrorDetail } from './validate.js';
 import { ValidationError } from './validate.js';
+import { buildErrorEnvelope } from './envelope.js';
 import type { ErrorEnvelope } from '../types/ResponseEnvelope.js';
 import { buildErrorEnvelope } from './envelope.js';
 
 const isProduction = process.env.NODE_ENV === "production";
-
-export interface ErrorResponseBody {
-  message: string;
-  code: string;
-  requestId: string;
-  details?: ValidationErrorDetail[];
-}
 
 function extractValidationDetails(err: unknown): ValidationErrorDetail[] | undefined {
   if (err instanceof ValidationError) {
