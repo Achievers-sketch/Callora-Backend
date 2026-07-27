@@ -98,6 +98,8 @@ curl -s -H "x-admin-api-key: $ADMIN_API_KEY" \
 
 `POST /api/admin/audit/replay` re-executes a previously audit-logged admin action using its original parameters, as recorded in the audit entry's `details` JSON blob. The endpoint is idempotent per underlying target (e.g. already-resolved quota requests surface an `already_resolved` outcome rather than double-applying state changes).
 
+> **Added in [#550](https://github.com/CalloraOrg/Callora-Backend/issues/550)** — forensic replay for audit-logged admin actions.
+
 ## Authentication
 
 Same as the listing endpoint (admin API key or admin JWT, plus IP allowlist).
