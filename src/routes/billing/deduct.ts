@@ -84,6 +84,18 @@ function getPool(req: Request): Pool {
   return pool;
 }
 
+// idempotencyMiddleware declares an optional 4th `opts` parameter, giving it
+// an arity of 4. Express treats any 4-arg middleware function as an
+// error handler (function(err, req, res, next)), so registering it directly
+// causes thrown errors (e.g. validation errors) to be misrouted into it
+// instead of the real error handler, surfacing as 500s. Wrap it to a 3-arg
+// function so Express dispatches it as normal middleware.
+const idempotencyHandler = (
+  req: Request,
+  res: Response<unknown, AuthenticatedLocals>,
+  next: NextFunction,
+) => idempotencyMiddleware(req, res, next);
+
 function sendSimulationFailure(
   res: Response,
   result: Pick<BillingDeductResult, "error" | "simulationDetails">,
@@ -99,7 +111,7 @@ function sendSimulationFailure(
 router.post(
   "/",
   requireAuth,
-  idempotencyMiddleware,
+  idempotencyHandler,
   billingDeductHistogramMiddleware,
   async (
     req: Request,

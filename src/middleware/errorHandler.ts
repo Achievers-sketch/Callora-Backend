@@ -14,11 +14,7 @@ export interface ErrorResponseBody {
   details?: ValidationErrorDetail[];
 }
 
-import { errorEnvelope } from "../lib/envelope.js";
-
-function extractValidationDetails(
-  err: unknown,
-): ValidationErrorDetail[] | undefined {
+function extractValidationDetails(err: unknown): ValidationErrorDetail[] | undefined {
   if (err instanceof ValidationError) {
     return err.details;
   }
@@ -109,8 +105,7 @@ export function errorHandler(
   }
 
   const details = extractValidationDetails(err);
-  const body = buildErrorEnvelope(code, finalMessage, requestId, details);
-  // Build error envelope with optional validation details
+  const body = errorEnvelope(code, finalMessage, requestId, details);
 
   if (!res.headersSent) {
     res.status(statusCode).json(body);
