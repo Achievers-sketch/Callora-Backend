@@ -32,6 +32,7 @@ import creditsRouter from "./billing/credits.js";
 import deductRouter from "./billing/deduct.js";
 import disputesRouter from "./billing/disputes.js";
 import { createFeeAbstractionRouter } from "./billing/feeAbstraction.js";
+import { createBillingForecastRouter } from "./billing/forecast.js";
 import { etagMiddleware } from "../middleware/etag.js";
 
 const router = Router();
@@ -42,6 +43,7 @@ router.use("/credits", creditsRouter);
 router.use("/disputes", disputesRouter);
 router.use("/deduct", deductRouter);
 router.use("/fee-abstraction", createFeeAbstractionRouter());
+router.use("/forecast", createBillingForecastRouter());
 
 interface BillingDeductBody {
   requestId?: unknown;
