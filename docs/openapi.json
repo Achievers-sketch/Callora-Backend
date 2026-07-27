@@ -107,7 +107,9 @@
       "get": {
         "summary": "Application health check",
         "description": "Returns the health status of the application and its dependencies (database, Soroban RPC, Horizon). Public endpoint — no authentication required.",
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "responses": {
           "200": {
             "description": "Application is healthy or partially degraded",
@@ -1180,6 +1182,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApisListResponse"
+                },
+                "examples": {
+                  "activeListings": {
+                    "summary": "Active API listings page",
+                    "value": {
+                      "data": [
+                        {
+                          "id": 101,
+                          "name": "GrantFox Scoring API",
+                          "description": "Scores FWC26 grant applications against program rules.",
+                          "base_url": "https://api.grantfox.example",
+                          "logo_url": "https://cdn.grantfox.example/logo.png",
+                          "category": "grants",
+                          "status": "active",
+                          "developer": {
+                            "id": 11,
+                            "name": "GrantFox Labs"
+                          },
+                          "endpoints": [
+                            {
+                              "id": 501,
+                              "api_id": 101,
+                              "path": "/applications/{applicationId}/score",
+                              "method": "POST",
+                              "price_per_call_usdc": "0.2500000",
+                              "description": "Score a single grant application.",
+                              "created_at": "2026-07-27T09:00:00.000Z",
+                              "updated_at": "2026-07-27T09:00:00.000Z"
+                            }
+                          ]
+                        },
+                        {
+                          "id": 102,
+                          "name": "GrantFox Eligibility API",
+                          "description": "Validates applicant eligibility before scoring.",
+                          "base_url": "https://api.grantfox.example",
+                          "logo_url": null,
+                          "category": "grants",
+                          "status": "active",
+                          "developer": {
+                            "id": 11,
+                            "name": "GrantFox Labs"
+                          },
+                          "endpoints": [
+                            {
+                              "id": 502,
+                              "api_id": 102,
+                              "path": "/applications/{applicationId}/eligibility",
+                              "method": "GET",
+                              "price_per_call_usdc": "0.0500000",
+                              "description": "Return eligibility checks for an application.",
+                              "created_at": "2026-07-27T09:05:00.000Z",
+                              "updated_at": "2026-07-27T09:05:00.000Z"
+                            }
+                          ]
+                        }
+                      ],
+                      "pagination": {
+                        "limit": 20,
+                        "offset": 0,
+                        "total": 2
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1201,6 +1267,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "internalServerError": {
+                    "summary": "Unexpected repository error",
+                    "value": {
+                      "code": "INTERNAL_SERVER_ERROR",
+                      "message": "Internal server error",
+                      "requestId": "req-apis-list-500"
+                    }
+                  }
                 }
               }
             }
@@ -1221,6 +1297,31 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ApiCreateRequest"
+              },
+              "examples": {
+                "publishApi": {
+                  "summary": "Publish a grant review API",
+                  "value": {
+                    "name": "GrantFox Review API",
+                    "description": "Automates FWC26 application review workflows.",
+                    "base_url": "https://api.grantfox.example",
+                    "category": "grants",
+                    "endpoints": [
+                      {
+                        "path": "/applications/{applicationId}/review",
+                        "method": "POST",
+                        "price_per_call_usdc": "0.3000000",
+                        "description": "Run the full review pipeline for one application."
+                      },
+                      {
+                        "path": "/applications/{applicationId}/status",
+                        "method": "GET",
+                        "price_per_call_usdc": "0.0200000",
+                        "description": "Fetch the latest review status."
+                      }
+                    ]
+                  }
+                }
               }
             }
           }
@@ -1232,6 +1333,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiCreateResponse"
+                },
+                "examples": {
+                  "createdApi": {
+                    "summary": "API published successfully",
+                    "value": {
+                      "id": 301,
+                      "developer_id": 11,
+                      "name": "GrantFox Review API",
+                      "description": "Automates FWC26 application review workflows.",
+                      "base_url": "https://api.grantfox.example",
+                      "logo_url": null,
+                      "category": "grants",
+                      "status": "active",
+                      "created_at": "2026-07-27T10:00:00.000Z",
+                      "updated_at": "2026-07-27T10:00:00.000Z",
+                      "endpoints": [
+                        {
+                          "id": 801,
+                          "api_id": 301,
+                          "path": "/applications/{applicationId}/review",
+                          "method": "POST",
+                          "price_per_call_usdc": "0.3000000",
+                          "description": "Run the full review pipeline for one application.",
+                          "created_at": "2026-07-27T10:00:00.000Z",
+                          "updated_at": "2026-07-27T10:00:00.000Z"
+                        },
+                        {
+                          "id": 802,
+                          "api_id": 301,
+                          "path": "/applications/{applicationId}/status",
+                          "method": "GET",
+                          "price_per_call_usdc": "0.0200000",
+                          "description": "Fetch the latest review status.",
+                          "created_at": "2026-07-27T10:00:00.000Z",
+                          "updated_at": "2026-07-27T10:00:00.000Z"
+                        }
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -1242,6 +1382,31 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "BAD_REQUEST",
+                      "message": "Path must start with /",
+                      "requestId": "req-apis-create-400",
+                      "details": [
+                        {
+                          "field": "endpoints.0.path",
+                          "message": "Path must start with /",
+                          "code": "custom"
+                        }
+                      ]
+                    }
+                  },
+                  "developerProfileMissing": {
+                    "summary": "Developer profile missing",
+                    "value": {
+                      "code": "BAD_REQUEST",
+                      "message": "Developer profile not found. Create a developer profile first.",
+                      "requestId": "req-apis-create-dev-missing"
+                    }
+                  }
                 }
               }
             }
@@ -1252,6 +1417,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing authentication",
+                    "value": {
+                      "code": "UNAUTHORIZED",
+                      "message": "Unauthorized",
+                      "requestId": "req-apis-create-401"
+                    }
+                  }
                 }
               }
             }
@@ -1262,6 +1437,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "internalServerError": {
+                    "summary": "Unexpected persistence error",
+                    "value": {
+                      "code": "INTERNAL_SERVER_ERROR",
+                      "message": "Internal server error",
+                      "requestId": "req-apis-create-500"
+                    }
+                  }
                 }
               }
             }
@@ -1290,6 +1475,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiDetailsResponse"
+                },
+                "examples": {
+                  "apiDetails": {
+                    "summary": "Detailed API record",
+                    "value": {
+                      "id": 101,
+                      "name": "GrantFox Scoring API",
+                      "description": "Scores FWC26 grant applications against program rules.",
+                      "base_url": "https://api.grantfox.example",
+                      "logo_url": "https://cdn.grantfox.example/logo.png",
+                      "category": "grants",
+                      "status": "active",
+                      "developer": {
+                        "id": 11,
+                        "name": "GrantFox Labs"
+                      },
+                      "endpoints": [
+                        {
+                          "id": 501,
+                          "api_id": 101,
+                          "path": "/applications/{applicationId}/score",
+                          "method": "POST",
+                          "price_per_call_usdc": "0.2500000",
+                          "description": "Score a single grant application.",
+                          "created_at": "2026-07-27T09:00:00.000Z",
+                          "updated_at": "2026-07-27T09:00:00.000Z"
+                        },
+                        {
+                          "id": 503,
+                          "api_id": 101,
+                          "path": "/applications/{applicationId}/score/explain",
+                          "method": "GET",
+                          "price_per_call_usdc": "0.0400000",
+                          "description": "Fetch scoring rationale for the latest run.",
+                          "created_at": "2026-07-27T09:10:00.000Z",
+                          "updated_at": "2026-07-27T09:10:00.000Z"
+                        }
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -1300,6 +1525,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidId": {
+                    "summary": "Invalid API id",
+                    "value": {
+                      "code": "BAD_REQUEST",
+                      "message": "id must be a positive integer",
+                      "requestId": "req-api-details-400"
+                    }
+                  }
                 }
               }
             }
@@ -1310,6 +1545,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "apiNotFound": {
+                    "summary": "API not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "message": "API not found or not active",
+                      "requestId": "req-api-details-404"
+                    }
+                  }
                 }
               }
             }
@@ -1320,6 +1565,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "internalServerError": {
+                    "summary": "Unexpected lookup error",
+                    "value": {
+                      "code": "INTERNAL_SERVER_ERROR",
+                      "message": "Internal server error",
+                      "requestId": "req-api-details-500"
+                    }
+                  }
                 }
               }
             }
@@ -1723,6 +1978,27 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/BulkEndpointRegistrationRequest"
+              },
+              "examples": {
+                "bulkRegisterEndpoints": {
+                  "summary": "Add two endpoints to an API",
+                  "value": {
+                    "endpoints": [
+                      {
+                        "path": "/applications/{applicationId}/decision",
+                        "method": "POST",
+                        "price_per_call_usdc": "0.1800000",
+                        "description": "Create a funding decision recommendation."
+                      },
+                      {
+                        "path": "/applications/{applicationId}/timeline",
+                        "method": "GET",
+                        "price_per_call_usdc": "0.0150000",
+                        "description": "Return review timeline milestones."
+                      }
+                    ]
+                  }
+                }
               }
             }
           }
@@ -1734,6 +2010,31 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BulkEndpointRegistrationResponse"
+                },
+                "examples": {
+                  "createdEndpoints": {
+                    "summary": "Endpoints added successfully",
+                    "value": {
+                      "endpoints": [
+                        {
+                          "id": 901,
+                          "api_id": 301,
+                          "path": "/applications/{applicationId}/decision",
+                          "method": "POST",
+                          "price_per_call_usdc": "0.1800000",
+                          "description": "Create a funding decision recommendation."
+                        },
+                        {
+                          "id": 902,
+                          "api_id": 301,
+                          "path": "/applications/{applicationId}/timeline",
+                          "method": "GET",
+                          "price_per_call_usdc": "0.0150000",
+                          "description": "Return review timeline milestones."
+                        }
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -1744,6 +2045,31 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidEndpoint": {
+                    "summary": "Invalid endpoint payload",
+                    "value": {
+                      "code": "BAD_REQUEST",
+                      "message": "Price per call must be a non-negative decimal string",
+                      "requestId": "req-bulk-endpoints-400",
+                      "details": [
+                        {
+                          "field": "endpoints.0.price_per_call_usdc",
+                          "message": "Price per call must be a non-negative decimal string",
+                          "code": "custom"
+                        }
+                      ]
+                    }
+                  },
+                  "tooManyEndpoints": {
+                    "summary": "Too many endpoints submitted",
+                    "value": {
+                      "code": "BAD_REQUEST",
+                      "message": "Cannot register more than 50 endpoints at once",
+                      "requestId": "req-bulk-endpoints-too-many"
+                    }
+                  }
                 }
               }
             }
@@ -1754,6 +2080,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing authentication",
+                    "value": {
+                      "code": "UNAUTHORIZED",
+                      "message": "Unauthorized",
+                      "requestId": "req-bulk-endpoints-401"
+                    }
+                  }
                 }
               }
             }
@@ -1764,6 +2100,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "apiNotFound": {
+                    "summary": "Owned API not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "message": "API not found",
+                      "requestId": "req-bulk-endpoints-404"
+                    }
+                  }
                 }
               }
             }
@@ -1774,6 +2120,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "internalServerError": {
+                    "summary": "Unexpected persistence error",
+                    "value": {
+                      "code": "INTERNAL_SERVER_ERROR",
+                      "message": "Internal server error",
+                      "requestId": "req-bulk-endpoints-500"
+                    }
+                  }
                 }
               }
             }
@@ -4091,26 +4447,44 @@
       "HealthChecks": {
         "type": "object",
         "description": "Per-dependency health check statuses.",
-        "required": ["api"],
+        "required": [
+          "api"
+        ],
         "properties": {
           "api": {
             "type": "string",
-            "enum": ["ok", "degraded", "down"],
+            "enum": [
+              "ok",
+              "degraded",
+              "down"
+            ],
             "description": "API server health"
           },
           "database": {
             "type": "string",
-            "enum": ["ok", "degraded", "down"],
+            "enum": [
+              "ok",
+              "degraded",
+              "down"
+            ],
             "description": "Database connection health"
           },
           "soroban_rpc": {
             "type": "string",
-            "enum": ["ok", "degraded", "down"],
+            "enum": [
+              "ok",
+              "degraded",
+              "down"
+            ],
             "description": "Soroban RPC connectivity"
           },
           "horizon": {
             "type": "string",
-            "enum": ["ok", "degraded", "down"],
+            "enum": [
+              "ok",
+              "degraded",
+              "down"
+            ],
             "description": "Horizon API connectivity"
           }
         }
@@ -4118,18 +4492,29 @@
       "HealthResponse": {
         "type": "object",
         "description": "Health check response in success envelope.",
-        "required": ["success", "data", "requestId", "timestamp"],
+        "required": [
+          "success",
+          "data",
+          "requestId",
+          "timestamp"
+        ],
         "properties": {
           "success": {
             "type": "boolean"
           },
           "data": {
             "type": "object",
-            "required": ["status"],
+            "required": [
+              "status"
+            ],
             "properties": {
               "status": {
                 "type": "string",
-                "enum": ["ok", "degraded", "down"],
+                "enum": [
+                  "ok",
+                  "degraded",
+                  "down"
+                ],
                 "description": "Aggregate health status"
               },
               "service": {
