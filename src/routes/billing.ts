@@ -32,6 +32,7 @@ import creditsRouter from "./billing/credits.js";
 import deductRouter from "./billing/deduct.js";
 import disputesRouter from "./billing/disputes.js";
 import { createFeeAbstractionRouter } from "./billing/feeAbstraction.js";
+import { etagMiddleware } from "../middleware/etag.js";
 
 const router = Router();
 
@@ -111,6 +112,7 @@ function sendSimulationFailure(
 router.get(
   "/",
   requireAuth,
+  etagMiddleware,
   async (
     req: Request,
     res: Response<unknown, AuthenticatedLocals>,
@@ -296,6 +298,7 @@ router.post(
 router.get(
   "/request/:requestId",
   requireAuth,
+  etagMiddleware,
   async (
     req: Request,
     res: Response<unknown, AuthenticatedLocals>,

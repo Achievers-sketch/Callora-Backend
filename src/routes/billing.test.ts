@@ -80,4 +80,44 @@ describe('GET /api/billing', () => {
     expect(res.body.data).toEqual([]);
     expect(res.body.meta.hasMore).toBe(false);
   });
+
+  it('supports ETag and returns 304 Not Modified', async () => {
+    const pool = {
+      query: jest.fn().mockResolvedValue({
+        rows: [
+          {
+            id: 'req-3',
+            request_id: 'request-3',
+            developer_id: 'dev-1',
+            api_id: 'api-3',
+            endpoint_id: 'endpoint-3',
+            api_key_id: 'key-3',
+            amount_usdc: '1.00',
+            created_at: new Date('2024-01-03T00:00:00.000Z'),
+          },
+        ],
+      }),
+    };
+
+    const app = buildApp(pool as unknown as { query: jest.Mock });
+
+    // First request should return 200 and ETag
+    const res1 = await request(app)
+      .get('/api/billing?limit=1')
+      .set('x-user-id', 'dev-1');
+
+    expect(res1.status).toBe(200);
+    expect(res1.headers.etag).toBeDefined();
+
+    const etag = res1.headers.etag;
+
+    // Second request with If-None-Match should return 304
+    const res2 = await request(app)
+      .get('/api/billing?limit=1')
+      .set('x-user-id', 'dev-1')
+      .set('If-None-Match', etag);
+
+    expect(res2.status).toBe(304);
+    expect(res2.body).toEqual({});
+  });
 });

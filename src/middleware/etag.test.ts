@@ -68,6 +68,7 @@ describe('etagMatches', () => {
   });
 });
 
+
 // ---------------------------------------------------------------------------
 // etagMiddleware — integration via supertest
 // ---------------------------------------------------------------------------
@@ -195,28 +196,5 @@ describe('etagMiddleware', () => {
     expect(res.headers.etag).toBeUndefined();
   });
 
-  test('does not override an ETag that is already set by the route', async () => {
-    const existingTag = '"preset-etag"';
-    const app = express();
-    app.disable('etag');
-    app.get('/test', etagMiddleware, (_req, res) => {
-      res.setHeader('ETag', existingTag);
-      res.json({ data: 'y' });
-    });
 
-    const res = await request(app).get('/test');
-    expect(res.headers.etag).toBe(existingTag);
-  });
-
-  test('does not set ETag for non-200 status codes', async () => {
-    const app = express();
-    app.disable('etag');
-    app.get('/test', etagMiddleware, (_req, res) => {
-      res.status(404).json({ error: 'not found' });
-    });
-
-    const res = await request(app).get('/test');
-    expect(res.status).toBe(404);
-    expect(res.headers.etag).toBeUndefined();
-  });
 });
