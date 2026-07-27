@@ -25,7 +25,9 @@ because billing operations are high-value and must be auditable.
 | `statusCode`       | number   | Alias for `status` (kept for compatibility with access-log format) |
 | `ms`               | number   | Request duration in milliseconds (3 decimal places)                |
 | `durationMs`       | number   | Alias for `ms`                                                     |
+| `responseBytes`    | number   | Size of the HTTP response body in bytes                            |
 | `userId`           | string?  | Authenticated developer/user ID (from `res.locals.authenticatedUser`) |
+| `actor`            | string?  | Alias for `userId` — surfaced separately for audit tooling queries |
 | `clientIp`         | string?  | Client IP address (respects `TRUST_PROXY_HEADERS`)                 |
 | `apiId`            | string?  | Billing target API ID (from request body)                          |
 | `endpointId`       | string?  | Billing target endpoint ID (from request body)                     |
