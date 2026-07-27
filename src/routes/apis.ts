@@ -1,5 +1,9 @@
-import { Router, type Response } from 'express';
-import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors/index.js';
+import { Router, type Response } from "express";
+import {
+  BadRequestError,
+  NotFoundError,
+  UnauthorizedError,
+} from "../errors/index.js";
 import {
   parsePagination,
   paginatedResponse,
@@ -7,26 +11,39 @@ import {
   decodeCursor,
   generateCursor,
   cursorPaginatedResponse,
-} from '../lib/pagination.js';
-import { buildCacheKey, listingsCache, type ListingsCache } from '../lib/listingsCache.js';
-import { recordCacheHit, recordCacheMiss } from '../metrics.js';
-import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
-import { bodyValidator } from '../middleware/validate.js';
-import { etagMiddleware } from '../middleware/etag.js';
+} from "../lib/pagination.js";
+import {
+  buildCacheKey,
+  listingsCache,
+  type ListingsCache,
+} from "../lib/listingsCache.js";
+import { recordCacheHit, recordCacheMiss } from "../metrics.js";
+import {
+  requireAuth,
+  type AuthenticatedLocals,
+} from "../middleware/requireAuth.js";
+import { bodyValidator } from "../middleware/validate.js";
+import { etagMiddleware } from "../middleware/etag.js";
 import {
   defaultApiRepository,
   type ApiRepository,
-} from '../repositories/apiRepository.js';
+} from "../repositories/apiRepository.js";
 import {
   defaultDeveloperRepository,
   type DeveloperRepository,
-} from '../repositories/developerRepository.js';
-import { apiRegistrationSchema, bulkEndpointsSchema } from '../validators/apiRegistration.js';
-import { createRateLimitMiddleware } from '../middleware/rateLimit.js';
-import { defaultAuditService, type AuditService } from '../services/auditService.js';
-import type { AuditContext } from '../middleware/auditEnrich.js';
-import { logger } from '../middleware/logging.js';
-import type { Request } from 'express';
+} from "../repositories/developerRepository.js";
+import {
+  apiRegistrationSchema,
+  bulkEndpointsSchema,
+} from "../validators/apis.js";
+import { createRateLimitMiddleware } from "../middleware/rateLimit.js";
+import {
+  defaultAuditService,
+  type AuditService,
+} from "../services/auditService.js";
+import type { AuditContext } from "../middleware/auditEnrich.js";
+import { logger } from "../middleware/logging.js";
+import type { Request } from "express";
 
 export interface ApisRouterDeps {
   apiRepository?: ApiRepository;
@@ -42,7 +59,8 @@ export interface ApisRouterDeps {
 export function createApisRouter(deps: ApisRouterDeps = {}): Router {
   const router = Router();
   const apiRepository = deps.apiRepository ?? defaultApiRepository;
-  const developerRepository = deps.developerRepository ?? defaultDeveloperRepository;
+  const developerRepository =
+    deps.developerRepository ?? defaultDeveloperRepository;
   const auditService = deps.auditService ?? defaultAuditService;
   const cache = deps.cache ?? listingsCache;
 
@@ -70,14 +88,16 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
     } catch (error) {
       logger.error(
         { event, actor, correlationId: ctx?.correlationId, err: error },
-        'Failed to persist audit log for API mutation',
+        "Failed to persist audit log for API mutation",
       );
     }
   }
-  const rateLimitMiddleware = deps.rateLimitMiddleware ?? createRateLimitMiddleware({
-    windowMs: 60_000,
-    maxRequests: 60,
-  });
+  const rateLimitMiddleware =
+    deps.rateLimitMiddleware ??
+    createRateLimitMiddleware({
+      windowMs: 60_000,
+      maxRequests: 60,
+    });
 
   router.use(rateLimitMiddleware);
 
@@ -88,26 +108,40 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
    * responses. Clients may send `If-None-Match: <etag>` on subsequent polls;
    * an unchanged listing returns `304 Not Modified` with an empty body.
    */
-  router.get('/', etagMiddleware, async (req, res, next) => {
+  router.get("/", etagMiddleware, async (req, res, next) => {
     try {
       const query = req.query as Record<string, string>;
-      const category = typeof req.query.category === 'string' ? req.query.category : undefined;
-      const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+      const category =
+        typeof req.query.category === "string" ? req.query.category : undefined;
+      const search =
+        typeof req.query.search === "string" ? req.query.search : undefined;
 
       // ── Cursor-based pagination path ───────────────────────────────────────
-      if (query.cursor !== undefined && query.cursor.trim() !== '') {
+      if (query.cursor !== undefined && query.cursor.trim() !== "") {
         const { limit, cursor: rawCursor } = parseCursorPagination(query);
 
         // decodeCursor throws a ValidationError (400) on malformed input.
-        const { created_at: cursorCreatedAt, id: cursorId } = decodeCursor(rawCursor!);
+        const { created_at: cursorCreatedAt, id: cursorId } = decodeCursor(
+          rawCursor!,
+        );
         const cursorDate = new Date(cursorCreatedAt);
         const cursorIdNum = parseInt(cursorId, 10);
         if (!Number.isFinite(cursorIdNum) || cursorIdNum <= 0) {
-          next(new BadRequestError('Invalid cursor: id component must be a positive integer'));
+          next(
+            new BadRequestError(
+              "Invalid cursor: id component must be a positive integer",
+            ),
+          );
           return;
         }
 
-        const cacheKey = buildCacheKey({ limit, offset: 0, category, search, cursor: rawCursor });
+        const cacheKey = buildCacheKey({
+          limit,
+          offset: 0,
+          category,
+          search,
+          cursor: rawCursor,
+        });
         const cached = cache.get(cacheKey);
         if (cached !== undefined) {
           recordCacheHit();
@@ -131,7 +165,10 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
         let nextCursor: string | undefined;
         if (hasMore && pageRows.length > 0) {
           const last = pageRows[pageRows.length - 1];
-          nextCursor = generateCursor(last.created_at.toISOString(), String(last.id));
+          nextCursor = generateCursor(
+            last.created_at.toISOString(),
+            String(last.id),
+          );
         }
 
         const response = cursorPaginatedResponse(pageRows, {
@@ -157,7 +194,12 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
       }
 
       recordCacheMiss();
-      const apis = await apiRepository.listPublic({ limit, offset, category, search });
+      const apis = await apiRepository.listPublic({
+        limit,
+        offset,
+        category,
+        search,
+      });
       const response = paginatedResponse(apis, { limit, offset });
 
       cache.set(cacheKey, response);
@@ -167,18 +209,18 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
     }
   });
 
-  router.get('/:id', etagMiddleware, async (req, res, next) => {
+  router.get("/:id", etagMiddleware, async (req, res, next) => {
     try {
       const id = Number(req.params.id);
 
       if (!Number.isInteger(id) || id <= 0) {
-        next(new BadRequestError('id must be a positive integer'));
+        next(new BadRequestError("id must be a positive integer"));
         return;
       }
 
       const api = await apiRepository.findById(id);
       if (!api) {
-        next(new NotFoundError('API not found or not active'));
+        next(new NotFoundError("API not found or not active"));
         return;
       }
 
@@ -201,7 +243,7 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
   });
 
   router.post(
-    '/',
+    "/",
     requireAuth,
     bodyValidator(apiRegistrationSchema),
     async (req, res: Response<unknown, AuthenticatedLocals>, next) => {
@@ -214,7 +256,12 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
 
         const developer = await developerRepository.findByUserId(user.id);
         if (!developer) {
-          next(new BadRequestError('Developer profile not found. Create a developer profile first.', 'DEVELOPER_NOT_FOUND'));
+          next(
+            new BadRequestError(
+              "Developer profile not found. Create a developer profile first.",
+              "DEVELOPER_NOT_FOUND",
+            ),
+          );
           return;
         }
 
@@ -225,7 +272,7 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
           description: payload.description ?? null,
           base_url: payload.base_url,
           category: payload.category,
-          status: 'active',
+          status: "active",
           endpoints: payload.endpoints.map((endpoint) => ({
             path: endpoint.path,
             method: endpoint.method,
@@ -234,14 +281,14 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
           })),
         });
 
-        await recordApiAudit(req, 'API_CREATE', user.id, {
+        await recordApiAudit(req, "API_CREATE", user.id, {
           apiId: api.id,
           before: null,
           after: {
             name: payload.name,
             base_url: payload.base_url,
             category: payload.category,
-            status: 'active',
+            status: "active",
             endpointCount: payload.endpoints.length,
           },
         });
@@ -254,7 +301,7 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
   );
 
   router.post(
-    '/:id/endpoints/bulk',
+    "/:id/endpoints/bulk",
     requireAuth,
     bodyValidator(bulkEndpointsSchema),
     async (req, res: Response<unknown, AuthenticatedLocals>, next) => {
@@ -267,7 +314,7 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
 
         const apiId = Number(req.params.id);
         if (!Number.isInteger(apiId) || apiId <= 0) {
-          next(new BadRequestError('id must be a positive integer'));
+          next(new BadRequestError("id must be a positive integer"));
           return;
         }
 
@@ -275,8 +322,8 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
         if (!developer) {
           next(
             new BadRequestError(
-              'Developer profile not found. Create a developer profile first.',
-              'DEVELOPER_NOT_FOUND',
+              "Developer profile not found. Create a developer profile first.",
+              "DEVELOPER_NOT_FOUND",
             ),
           );
           return;
@@ -285,7 +332,7 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
         const developerApis = await apiRepository.listByDeveloper(developer.id);
         const api = developerApis.find((a) => a.id === apiId);
         if (!api) {
-          next(new NotFoundError('API not found'));
+          next(new NotFoundError("API not found"));
           return;
         }
 
@@ -300,7 +347,7 @@ export function createApisRouter(deps: ApisRouterDeps = {}): Router {
           })),
         );
 
-        await recordApiAudit(req, 'API_ENDPOINTS_BULK_CREATE', user.id, {
+        await recordApiAudit(req, "API_ENDPOINTS_BULK_CREATE", user.id, {
           apiId,
           before: null,
           after: {
