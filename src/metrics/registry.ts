@@ -69,8 +69,22 @@ export function resetRefreshTokenMetrics(): void {
   refreshTokenDuration.reset();
 }
 
-export function resetApisMetrics(): void {
-  apisLatencyDuration.reset();
+const maintenanceDuration = new client.Histogram({
+  name: 'maintenance_duration_seconds',
+  help: 'Latency of GET /api/maintenance in seconds',
+  labelNames: ['route', 'status_code'],
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+});
+
+export function recordMaintenanceDuration(statusCode: number, durationMs: number): void {
+  maintenanceDuration.observe(
+    { route: '/api/maintenance', status_code: String(statusCode) },
+    durationMs / 1000,
+  );
 }
 
-export { billingDeductDuration, refreshTokenDuration, apisLatencyDuration };
+export function resetMaintenanceMetrics(): void {
+  maintenanceDuration.reset();
+}
+
+export { billingDeductDuration, refreshTokenDuration, maintenanceDuration };

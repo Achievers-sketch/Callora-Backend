@@ -64,6 +64,7 @@ const makeSubscription = (overrides: Partial<Subscription> = {}): Subscription =
   api_id: 10,
   status: 'active',
   metering_limit: null,
+  retry_policy: null,
   created_at: now,
   updated_at: now,
   cancelled_at: null,
@@ -505,5 +506,345 @@ describe('DELETE /api/subscriptions/:id', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('cancelled');
     expect(res.body.cancelled_at).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-subscription Webhook Retry Policy Override
+// ---------------------------------------------------------------------------
+
+describe('POST /api/subscriptions — retry_policy', () => {
+  it('creates a subscription with a valid retry_policy override', async () => {
+    const retryPolicy = { maxRetries: 3, baseDelayMs: 500 };
+    const created = makeSubscription({ retry_policy: JSON.stringify(retryPolicy) });
+    const subRepo = makeSubscriptionRepo({ create: jest.fn().mockResolvedValue(created) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: retryPolicy });
+
+    expect(res.status).toBe(201);
+    // The repo returns the raw row; retry_policy is persisted as a JSON string in DB
+    expect(res.body.retry_policy).toBe(JSON.stringify(retryPolicy));
+  });
+
+  it('creates a subscription without retry_policy (uses platform default)', async () => {
+    const created = makeSubscription({ retry_policy: null });
+    const subRepo = makeSubscriptionRepo({ create: jest.fn().mockResolvedValue(created) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10 });
+
+    expect(res.status).toBe(201);
+    expect(res.body.retry_policy).toBeNull();
+  });
+
+  it('creates a subscription with retry_policy: null (explicitly clear)', async () => {
+    const created = makeSubscription({ retry_policy: null });
+    const subRepo = makeSubscriptionRepo({ create: jest.fn().mockResolvedValue(created) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: null });
+
+    expect(res.status).toBe(201);
+    expect(res.body.retry_policy).toBeNull();
+  });
+
+  it('returns 400 for invalid maxRetries (above 10)', async () => {
+    const app = buildApp(makeSubscriptionRepo(), makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: { maxRetries: 11 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid maxRetries (below 0)', async () => {
+    const app = buildApp(makeSubscriptionRepo(), makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: { maxRetries: -1 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid baseDelayMs (below 100)', async () => {
+    const app = buildApp(makeSubscriptionRepo(), makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: { baseDelayMs: 99 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid baseDelayMs (above 60000)', async () => {
+    const app = buildApp(makeSubscriptionRepo(), makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: { baseDelayMs: 60001 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for non-integer maxRetries', async () => {
+    const app = buildApp(makeSubscriptionRepo(), makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: { maxRetries: 3.5 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for non-integer baseDelayMs', async () => {
+    const app = buildApp(makeSubscriptionRepo(), makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: { baseDelayMs: 1000.5 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts retry_policy with only maxRetries set', async () => {
+    const retryPolicy = { maxRetries: 2 };
+    const created = makeSubscription({ retry_policy: JSON.stringify(retryPolicy) });
+    const subRepo = makeSubscriptionRepo({ create: jest.fn().mockResolvedValue(created) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: retryPolicy });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('accepts retry_policy with only baseDelayMs set', async () => {
+    const retryPolicy = { baseDelayMs: 2000 };
+    const created = makeSubscription({ retry_policy: JSON.stringify(retryPolicy) });
+    const subRepo = makeSubscriptionRepo({ create: jest.fn().mockResolvedValue(created) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: retryPolicy });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('accepts maxRetries: 0 (no retries)', async () => {
+    const retryPolicy = { maxRetries: 0 };
+    const created = makeSubscription({ retry_policy: JSON.stringify(retryPolicy) });
+    const subRepo = makeSubscriptionRepo({ create: jest.fn().mockResolvedValue(created) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: retryPolicy });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('returns 400 for extra unknown fields in retry_policy', async () => {
+    const app = buildApp(makeSubscriptionRepo(), makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: { maxRetries: 3, unknownField: 'x' } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('passes retry_policy to repository create', async () => {
+    const retryPolicy = { maxRetries: 5, baseDelayMs: 1500 };
+    const created = makeSubscription({ retry_policy: JSON.stringify(retryPolicy) });
+    const createFn = jest.fn().mockResolvedValue(created);
+    const subRepo = makeSubscriptionRepo({ create: createFn });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    await request(app)
+      .post('/api/subscriptions')
+      .set('x-user-id', 'user-subscriber')
+      .send({ api_id: 10, retry_policy: retryPolicy });
+
+    expect(createFn).toHaveBeenCalledWith(
+      expect.objectContaining({ retry_policy: retryPolicy }),
+    );
+  });
+});
+
+describe('PATCH /api/subscriptions/:id — retry_policy', () => {
+  it('updates the retry_policy on an existing subscription', async () => {
+    const sub = makeSubscription();
+    const retryPolicy = { maxRetries: 4, baseDelayMs: 800 };
+    const updated = makeSubscription({ retry_policy: JSON.stringify(retryPolicy) });
+    const subRepo = makeSubscriptionRepo({
+      findById: jest.fn().mockResolvedValue(sub),
+      update: jest.fn().mockResolvedValue(updated),
+    });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ retry_policy: retryPolicy });
+
+    expect(res.status).toBe(200);
+    expect(res.body.retry_policy).toBe(JSON.stringify(retryPolicy));
+  });
+
+  it('clears retry_policy to null (revert to platform default)', async () => {
+    const sub = makeSubscription({ retry_policy: JSON.stringify({ maxRetries: 3 }) });
+    const updated = makeSubscription({ retry_policy: null });
+    const subRepo = makeSubscriptionRepo({
+      findById: jest.fn().mockResolvedValue(sub),
+      update: jest.fn().mockResolvedValue(updated),
+    });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ retry_policy: null });
+
+    expect(res.status).toBe(200);
+    expect(res.body.retry_policy).toBeNull();
+  });
+
+  it('returns 400 for invalid maxRetries in PATCH body', async () => {
+    const sub = makeSubscription();
+    const subRepo = makeSubscriptionRepo({ findById: jest.fn().mockResolvedValue(sub) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ retry_policy: { maxRetries: 15 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid baseDelayMs in PATCH body', async () => {
+    const sub = makeSubscription();
+    const subRepo = makeSubscriptionRepo({ findById: jest.fn().mockResolvedValue(sub) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ retry_policy: { baseDelayMs: 50 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for non-integer maxRetries in PATCH body', async () => {
+    const sub = makeSubscription();
+    const subRepo = makeSubscriptionRepo({ findById: jest.fn().mockResolvedValue(sub) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ retry_policy: { maxRetries: 2.5 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('passes retry_policy to repository update', async () => {
+    const sub = makeSubscription();
+    const retryPolicy = { maxRetries: 7, baseDelayMs: 3000 };
+    const updated = makeSubscription({ retry_policy: JSON.stringify(retryPolicy) });
+    const updateFn = jest.fn().mockResolvedValue(updated);
+    const subRepo = makeSubscriptionRepo({
+      findById: jest.fn().mockResolvedValue(sub),
+      update: updateFn,
+    });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ retry_policy: retryPolicy });
+
+    expect(updateFn).toHaveBeenCalledWith(
+      'sub-001',
+      expect.objectContaining({ retry_policy: retryPolicy }),
+    );
+  });
+
+  it('accepts retry_policy alongside other updates', async () => {
+    const sub = makeSubscription();
+    const retryPolicy = { maxRetries: 2, baseDelayMs: 200 };
+    const updated = makeSubscription({ status: 'paused', retry_policy: JSON.stringify(retryPolicy) });
+    const subRepo = makeSubscriptionRepo({
+      findById: jest.fn().mockResolvedValue(sub),
+      update: jest.fn().mockResolvedValue(updated),
+    });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ status: 'paused', retry_policy: retryPolicy });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('paused');
+    expect(res.body.retry_policy).toBe(JSON.stringify(retryPolicy));
+  });
+
+  it('does not touch retry_policy when not present in PATCH body', async () => {
+    const storedPolicy = JSON.stringify({ maxRetries: 3 });
+    const sub = makeSubscription({ retry_policy: storedPolicy });
+    const updated = makeSubscription({ status: 'paused', retry_policy: storedPolicy });
+    const updateFn = jest.fn().mockResolvedValue(updated);
+    const subRepo = makeSubscriptionRepo({
+      findById: jest.fn().mockResolvedValue(sub),
+      update: updateFn,
+    });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ status: 'paused' });
+
+    // retry_policy should NOT be in the update call (undefined = leave unchanged)
+    const updateArg = updateFn.mock.calls[0][1];
+    expect(updateArg).not.toHaveProperty('retry_policy');
+  });
+
+  it('returns 400 for extra unknown fields in retry_policy on PATCH', async () => {
+    const sub = makeSubscription();
+    const subRepo = makeSubscriptionRepo({ findById: jest.fn().mockResolvedValue(sub) });
+    const app = buildApp(subRepo, makeApiRepo(), makeDeveloperRepo());
+
+    const res = await request(app)
+      .patch('/api/subscriptions/sub-001')
+      .set('x-user-id', 'user-subscriber')
+      .send({ retry_policy: { maxRetries: 3, bogus: true } });
+
+    expect(res.status).toBe(400);
   });
 });
