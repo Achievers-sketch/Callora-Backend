@@ -14,6 +14,25 @@ const refreshTokenDuration = new client.Histogram({
   buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
 });
 
+/**
+ * Histogram for /api/apis latency (FWC26 issue #893).
+ *
+ * Buckets chosen for marketplace listing operations:
+ *   - Finer granularity at 1–50ms (typical in-process reads, cache hits)
+ *   - Wider buckets beyond 50ms (DB reads, network I/O)
+ *   - Tail capture up to 10s (slow clients, downstream delays)
+ *
+ * The /api/apis routes (GET list, GET detail, POST create) combine cache hits
+ * (typically <5ms) and DB/service calls (typically 10–100ms), so the bucket
+ * distribution favors visibility in the common range while preserving SLO tail metrics.
+ */
+const apisLatencyDuration = new client.Histogram({
+  name: 'apis_request_duration_seconds',
+  help: 'Latency of /api/apis requests in seconds (FWC26 issue #893)',
+  labelNames: ['route', 'method', 'status_code'],
+  buckets: [0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+});
+
 export function recordBillingDeductDuration(statusCode: number, durationMs: number): void {
   billingDeductDuration.observe(
     { route: '/api/billing/deduct', status_code: String(statusCode) },
@@ -28,6 +47,20 @@ export function recordRefreshTokenDuration(statusCode: number, durationMs: numbe
   );
 }
 
+/**
+ * Record a latency observation for an /api/apis request.
+ *
+ * @param method – HTTP verb (GET, POST)
+ * @param statusCode – Response status code
+ * @param durationMs – Elapsed time in milliseconds
+ */
+export function recordApisLatency(method: string, statusCode: number, durationMs: number): void {
+  apisLatencyDuration.observe(
+    { route: '/api/apis', method: method.toUpperCase(), status_code: String(statusCode) },
+    durationMs / 1000,
+  );
+}
+
 export function resetBillingDeductMetrics(): void {
   billingDeductDuration.reset();
 }
@@ -36,4 +69,8 @@ export function resetRefreshTokenMetrics(): void {
   refreshTokenDuration.reset();
 }
 
-export { billingDeductDuration, refreshTokenDuration };
+export function resetApisMetrics(): void {
+  apisLatencyDuration.reset();
+}
+
+export { billingDeductDuration, refreshTokenDuration, apisLatencyDuration };
