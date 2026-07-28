@@ -8,6 +8,7 @@ import { createUsageAnomaliesRouter } from './routes/admin/usage/anomalies.js';
 import { createAdminUsageByEndpointRouter } from './routes/admin/usage/byEndpoint.js';
 import { createApiRouter } from './routes/index.js';
 import { createApisRouter } from './routes/apis.js';
+import { createWebhooksRouter } from './routes/webhooks.js';
 import { createPluginsRouter } from './routes/marketplace/plugins.js';
 import { pool } from './db.js';
 import {
@@ -305,6 +306,9 @@ export const createApp = (dependencies?: Partial<AppDependencies>) => {
 
   // Plugin marketplace — community-developed billing rule plugins
   app.use('/api/marketplace/plugins', createPluginsRouter());
+
+  // Webhook management routes
+  app.use('/api/webhooks', createWebhooksRouter());
 
   // Mount all routes including billing and limits
   app.use('/api', createApiRouter({

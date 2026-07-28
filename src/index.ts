@@ -24,6 +24,7 @@ import type { Server } from 'http';
 import { createDeveloperRouter } from './routes/developerRoutes.js';
 import { createGatewayRouter } from './routes/gatewayRoutes.js';
 import { createProxyRouter } from './routes/proxyRoutes.js';
+import { createWebhooksRouter } from './routes/webhooks.js';
 import adminRouter from './routes/admin.js';
 import { createUsageAnomaliesRouter } from './routes/admin/usage/anomalies.js';
 import { defaultDeveloperRepository } from './repositories/developerRepository.js';
@@ -171,6 +172,10 @@ if (isDirectExecution) {
   // Mounted before the generic admin router so it is not shadowed by
   // adminRouter's `/usage/:developerId` route.
   app.use('/api/admin/usage/anomalies', createUsageAnomaliesRouter({ pool }));
+
+  // Webhook management routes
+  app.use('/api/webhooks', createWebhooksRouter());
+
   app.use('/api/admin', adminRouter);
 
   // Legacy gateway route (existing)
