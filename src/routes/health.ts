@@ -3,18 +3,19 @@ import type { HealthResponse } from '../types/index.js';
 import { pool } from '../db.js';
 import { config } from '../config/index.js';
 import { performHealthCheck } from '../services/healthCheck.js';
-import { activeMaintenanceWindow } from './admin/maintenance.js'; // <-- Added maintenance state import
+import { activeMaintenanceWindow } from './admin/maintenance.js';
 import { createDbHealthRouter } from './health/db.js';
+import { healthAccessLog } from '../middleware/accessLog.js';
 
 const router = Router();
 
-// Mount the new DB pool stats endpoint
-router.use('/db', createDbHealthRouter());
+router.use(healthAccessLog);
+
+router.get('/db', createDbHealthRouter());
 
 router.get('/', async (_req, res) => {
   const now = new Date();
 
-  // 1. Evaluate if the current system timestamp falls exactly within the active maintenance window
   const isCurrentlyUnderMaintenance = 
     activeMaintenanceWindow.isEnabled &&
     activeMaintenanceWindow.startTime &&
@@ -35,7 +36,6 @@ router.get('/', async (_req, res) => {
     return;
   }
 
-  // 2. Fall back to your standard runtime health checks if not under maintenance
   const response: HealthResponse = await performHealthCheck({
     version: config.version,
     database: {
