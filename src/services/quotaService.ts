@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../logger.js';
-import { NotFoundError, ConflictError } from '../errors/index.js';
+import { BadRequestError, NotFoundError, ConflictError } from '../errors/index.js';
 import { quotasCache } from './quotasCacheWarm.js';
 
 // ---------------------------------------------------------------------------

@@ -207,8 +207,8 @@ describe('GET /api/admin/audit', () => {
       .set('x-admin-api-key', ADMIN_KEY);
 
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('VALIDATION_ERROR');
-    expect(res.body.details).toEqual(
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.details).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ field: 'query.cursor' }),
       ]),
@@ -224,7 +224,7 @@ describe('GET /api/admin/audit', () => {
       .set('x-admin-api-key', ADMIN_KEY);
 
     expect(res.status).toBe(400);
-    expect(res.body.details).toEqual(
+    expect(res.body.error.details).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ field: 'query.limit' }),
       ]),
@@ -240,7 +240,11 @@ describe('GET /api/admin/audit', () => {
       .set('x-admin-api-key', ADMIN_KEY);
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toContain('from');
+    expect(res.body.error.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'query.from' }),
+      ]),
+    );
   });
 
   it('rejects when from is after to', async () => {
@@ -256,7 +260,11 @@ describe('GET /api/admin/audit', () => {
       .set('x-admin-api-key', ADMIN_KEY);
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toContain('from');
+    expect(res.body.error.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'query.from' }),
+      ]),
+    );
   });
 
   it('requires admin authentication', async () => {
