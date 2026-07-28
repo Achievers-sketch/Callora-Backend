@@ -138,6 +138,7 @@ The migration is in `migrations/0019_disputes.sql` (rollback: `migrations/0019_d
   - `POST /api/apis` for authenticated developers to register an API with priced endpoints
 - Usage route: `GET /api/usage`
 - Top-N endpoints per developer: `GET /api/usage/by-endpoint` — returns the authenticated developer's most-called endpoints ranked by call volume, filterable by `from`/`to`/`apiId`/`limit` (see [docs/usage-by-endpoint.md](./docs/usage-by-endpoint.md))
+- Hourly usage aggregation: `GET /api/usage/aggregate` — returns per-hour call counts and revenue for the authenticated developer, optionally filtered by `from`/`to`/`apiId`; defaults to the last 24 hours when dates are omitted (see [docs/usage-aggregate.md](./docs/usage-aggregate.md))
 - Live usage stream: `GET /api/usage/sse` for authenticated developer dashboards
 - Admin usage anomalies: `GET /api/admin/usage/anomalies` returns per-API daily usage anomalies (z-score spikes/drops) for admin review, filterable by `from`/`to`/`apiId`/`threshold`/`limit` (admin auth + IP allowlist)
 - Admin usage export: `GET /api/admin/usage/export` streams usage events as CSV or JSON for reporting, with optional `from`/`to`/`developerId`/`apiId`/`format` filters (admin auth + IP allowlist); see [docs/admin-usage-export.md](./docs/admin-usage-export.md)
