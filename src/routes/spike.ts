@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request } from 'express';
-import { timeoutMiddleware } from '../middleware/timeout.js';
+import { createTimeoutMiddleware } from '../middleware/timeout.js';
 import { defaultAuditService, type AuditService } from '../services/auditService.js';
 import { logger } from '../logger.js';
 import { NotFoundError, BadRequestError } from '../errors/index.js';
@@ -50,7 +50,7 @@ export function createSpikeRouter(deps: SpikeRouterDeps = {}): Router {
     }
   }
 
-  router.get('/', timeoutMiddleware({ timeoutMs: 1000 }), async (req, res, next) => {
+  router.get('/', createTimeoutMiddleware({ timeoutMs: 1000 }), async (req, res, next) => {
     try {
       let delay = 2000;
       if (typeof req.query.delay === 'string') {
