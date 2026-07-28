@@ -15,15 +15,12 @@ import { config } from '../config/index.js';
 import { logger } from '../logger.js';
 import { validateRetryPolicy } from '../services/webhookRetry.js';
 import { createWebhookHealthRouter } from '../routes/webhooks/health.js';
-import { validate } from '../middleware/validate.js';
-import {
-  registerWebhookSchema,
-  updateWebhookRetryPolicySchema,
-  webhookDeliveryPayloadSchema,
-  webhookDeveloperParamsSchema,
-} from '../validators/webhooks.js';
+import { securityHeadersMiddleware } from '../middleware/securityHeaders.js';
 
 const router = Router();
+
+// Apply security header sweep middleware to all webhook routes
+router.use(securityHeadersMiddleware);
 
 /**
  * Structured access log middleware scoped to webhook routes.
