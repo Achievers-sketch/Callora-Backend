@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, type AuthenticatedLocals } from '../middleware/requireAuth.js';
 import { validate } from '../middleware/validate.js';
+import { securityHeadersMiddleware } from '../middleware/securityHeaders.js';
 import { ForbiddenError, UnauthorizedError } from '../errors/index.js';
 import type { ReportExporterService } from '../services/reportExporter.js';
 import type { DeveloperRepository } from '../repositories/developerRepository.js';
@@ -38,6 +39,10 @@ export function createExportsRouter(deps: ExportsRouterDeps): Router {
   const router = Router();
   const { reportExporterService, developerRepository } = deps;
 
+  // Apply CSP, X-Content-Type-Options, and Referrer-Policy on every /api/exports response
+  // (success and error paths) — GrantFox FWC26 security header sweep.
+  router.use(securityHeadersMiddleware);
+
   /**
    * GET /api/exports
    *
@@ -51,6 +56,7 @@ export function createExportsRouter(deps: ExportsRouterDeps): Router {
    *   format     - Filter by format: 'csv' or 'json' (optional)
    *
    * Security: Requires authentication. Non-admin users can only access their own exports.
+   * Responses always include Content-Security-Policy, X-Content-Type-Options, and Referrer-Policy.
    *
    * @example Request
    * GET /api/exports?limit=10&offset=0
