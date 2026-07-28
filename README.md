@@ -80,10 +80,10 @@ See [docs/fee-abstraction.md](./docs/fee-abstraction.md) for full API reference,
 
 Authenticated users can subscribe to marketplace APIs with optional metering preferences.
 
-- `POST /api/subscriptions` — subscribe to an API (`api_id` required; optional `metering_limit` as max calls/month)
+- `POST /api/subscriptions` — subscribe to an API (`api_id` required; optional `metering_limit` as max calls/month; optional `retry_policy` to override webhook retry behaviour)
 - `GET /api/subscriptions` — list subscriptions for the authenticated user; filter by `?status=active|paused|cancelled`
 - `GET /api/subscriptions/:id` — get a single subscription (must belong to the authenticated user)
-- `PATCH /api/subscriptions/:id` — update `status` (`active`/`paused`) or `metering_limit`; body must include at least one field
+- `PATCH /api/subscriptions/:id` — update `status` (`active`/`paused`), `metering_limit`, or `retry_policy`; body must include at least one field; pass `retry_policy: null` to revert to the platform default
 - `DELETE /api/subscriptions/:id` — cancel a subscription (soft-delete; sets status to `cancelled`)
 
 Business rules:
@@ -92,7 +92,10 @@ Business rules:
 - Soft-deleted (deleted) APIs cannot be subscribed to (returns `404`).
 - Cancelled subscriptions cannot be modified or re-cancelled (returns `400`).
 
-The migration is in `migrations/0018_subscriptions.sql`.
+**Per-subscription webhook retry policy** (`retry_policy`):  
+An optional `{ maxRetries?: 0–10, baseDelayMs?: 100–60000 }` object that overrides the platform default retry behaviour for webhook deliveries. Omitted fields fall back to platform defaults (`maxRetries: 5`, `baseDelayMs: 1000 ms`). Pass `null` to clear the override. Stored as a JSON text column in the `subscriptions` table. See [docs/webhook-retry-override.md](./docs/webhook-retry-override.md) for full details.
+
+The migration is in `migrations/0018_subscriptions.sql`; the retry policy column is added by `migrations/0020_subscription_retry_policy.sql`.
 
 ## Dispute Resolution Endpoints
 
