@@ -27,9 +27,11 @@ import type { Socket } from "net";
 import { createDeveloperRouter } from "./routes/developerRoutes.js";
 import { createGatewayRouter } from "./routes/gatewayRoutes.js";
 import { createProxyRouter } from "./routes/proxyRoutes.js";
+import { createApiKeyRouter } from "./routes/apiKeyRoutes.js";
 import adminRouter from "./routes/admin.js";
 import { createUsageAnomaliesRouter } from "./routes/admin/usage/anomalies.js";
 import refundsRouter from "./routes/refunds.js";
+import { defaultApiRepository } from "./repositories/apiRepository.js";
 import { defaultDeveloperRepository } from "./repositories/developerRepository.js";
 import { createBillingService } from "./services/billingService.js";
 import {
@@ -267,8 +269,14 @@ if (isDirectExecution) {
     },
   });
   const proxyDrainTracker = createInFlightDrainTracker("gateway-proxy");
+  const keysDrainTracker = createInFlightDrainTracker("api-keys");
+  const apiKeyRouter = createApiKeyRouter({
+    apiRepository: defaultApiRepository,
+    developerRepository: defaultDeveloperRepository,
+  });
   const shutdownSubsystems: DrainableSubsystem[] = [
     proxyDrainTracker.subsystem,
+    keysDrainTracker.subsystem,
     {
       name: "revenue-ledger-indexer",
       beginShutdown: () => revenueLedgerIndexerJob.beginShutdown(),
@@ -326,6 +334,9 @@ if (isDirectExecution) {
     proxyDrainTracker.middleware,
   );
   app.use("/v1/call", proxyRouter);
+
+  app.use("/api", keysDrainTracker.middleware);
+  app.use("/api", apiKeyRouter);
 
   app.use(express.json());
 
