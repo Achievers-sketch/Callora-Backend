@@ -15,6 +15,7 @@ import { createLimitsRouter } from "./limits.js";
 import { InMemoryRestRateLimiter } from "../middleware/restRateLimit.js";
 import { createUsageCsvRouter } from "./usage/csv.js";
 import { createUsageByEndpointRouter } from "./usage/byEndpoint.js";
+import { createUsageAggregateRouter } from "./usage/aggregate.js";
 import { createExportSchedulesRouter } from "./exports/schedules.js";
 import { createExportsRouter } from "./exports.js";
 import type { ScheduledExportsService } from "../services/scheduledExports.js";
@@ -69,6 +70,13 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
   router.use(
     "/usage/by-endpoint",
     createUsageByEndpointRouter({
+      usageEventsRepository: deps.usageEventsRepository!,
+    }),
+  );
+
+  router.use(
+    "/usage/aggregate",
+    createUsageAggregateRouter({
       usageEventsRepository: deps.usageEventsRepository!,
     }),
   );
