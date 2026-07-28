@@ -45,4 +45,31 @@ describe('auditService.record', () => {
     const [, params] = writeQueryMock.mock.calls[0] as [string, unknown[]];
     expect(params.slice(3)).toEqual([null, null, null, null, null, null]);
   });
+
+  it('persists error mutation audit rows (ERROR_CREATE, ERROR_UPDATE, ERROR_DELETE)', async () => {
+    await defaultAuditService.record({
+      event: 'ERROR_CREATE',
+      actor: 'dev-user-123',
+      correlationId: 'req-corr-456',
+      details: {
+        errorId: '1',
+        before: null,
+        after: { code: 'ERR_01', message: 'Something went wrong', statusCode: 400 },
+      },
+    });
+
+    expect(writeQueryMock).toHaveBeenCalledTimes(1);
+    const [sql, params] = writeQueryMock.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('INSERT INTO audit_logs');
+    expect(params[1]).toBe('ERROR_CREATE');
+    expect(params[2]).toBe('dev-user-123');
+    expect(params[6]).toBe('req-corr-456');
+    expect(params[8]).toBe(
+      JSON.stringify({
+        errorId: '1',
+        before: null,
+        after: { code: 'ERR_01', message: 'Something went wrong', statusCode: 400 },
+      }),
+    );
+  });
 });

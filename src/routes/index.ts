@@ -26,9 +26,10 @@ import type { SubscriptionRepository } from "../repositories/subscriptionReposit
 import type { DeveloperRepository } from "../repositories/developerRepository.js";
 import type { ApiRepository } from "../repositories/apiRepository.js";
 import { createForecastRouter } from "./forecast.js";
-import { createTenantsRouter } from "./tenants.js";
+import { createErrorsRouter } from "./errors.js";
 import { config } from "../config/index.js";
 import { createBillingRateLimitMiddleware } from "../middleware/rateLimit.js";
+import type { AuditService } from "../services/auditService.js";
 
 const openApiPath = path.join(process.cwd(), "docs/openapi.json");
 const openApiSpec = JSON.parse(readFileSync(openApiPath, "utf8"));
@@ -44,6 +45,7 @@ export interface ApiRouterDeps
   developerRepository?: DeveloperRepository;
   apiRepository?: ApiRepository;
   usageSseBroadcaster?: UsageSseBroadcaster;
+  auditService?: AuditService;
 }
 
 export function createApiRouter(deps: ApiRouterDeps = {}): Router {
@@ -51,6 +53,7 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
 
   router.use("/health", healthRouter);
   router.use("/spike", createSpikeRouter());
+  router.use("/errors", createErrorsRouter({ auditService: deps.auditService }));
 
   router.use(
     "/apis",
