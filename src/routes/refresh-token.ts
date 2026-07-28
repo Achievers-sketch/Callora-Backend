@@ -33,15 +33,29 @@ import { getRequestId } from '../utils/asyncContext.js';
 import type { RefreshTokenRepository } from '../repositories/refreshTokenRepository.js';
 import { DatabaseRefreshTokenRepository } from '../repositories/refreshTokenRepository.js';
 
+import {
+  createTokenBucketRateLimitMiddleware,
+  TokenBucketRateLimiter,
+} from '../middleware/rateLimit.js';
+import type { RequestHandler } from 'express';
+
 const TRUST_PROXY = process.env.TRUST_PROXY_HEADERS === 'true';
 
 export interface RefreshTokenRouterDeps {
   refreshTokenRepository?: RefreshTokenRepository;
+  rateLimitMiddleware?: RequestHandler;
+  rateLimiter?: TokenBucketRateLimiter;
 }
 
 export function createRefreshTokenRouter(deps: RefreshTokenRouterDeps = {}): Router {
   const router = Router();
   const refreshTokenRepository = deps.refreshTokenRepository ?? new DatabaseRefreshTokenRepository();
+  const rateLimitMiddleware =
+    deps.rateLimitMiddleware ??
+    createTokenBucketRateLimitMiddleware(
+      { capacity: 10, refillRate: 1 },
+      deps.rateLimiter,
+    );
 
   /**
    * GET /api/refresh-token
@@ -74,7 +88,7 @@ export function createRefreshTokenRouter(deps: RefreshTokenRouterDeps = {}): Rou
    *     "timestamp": "2026-..."
    *   }
    */
-  router.get('/', requireAuth, async (req, res, next) => {
+  router.get('/', rateLimitMiddleware, requireAuth, async (req, res, next) => {
     const requestId = getRequestId();
     const userId = req.developerId || res.locals.authenticatedUser?.id;
 
