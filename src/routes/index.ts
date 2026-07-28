@@ -25,6 +25,7 @@ import type { SubscriptionRepository } from "../repositories/subscriptionReposit
 import type { DeveloperRepository } from "../repositories/developerRepository.js";
 import type { ApiRepository } from "../repositories/apiRepository.js";
 import { createForecastRouter } from "./forecast.js";
+import { createTenantsRouter } from "./tenants.js";
 import { config } from "../config/index.js";
 import { createBillingRateLimitMiddleware } from "../middleware/rateLimit.js";
 
@@ -88,6 +89,7 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
   );
 
   router.use("/forecast", createForecastRouter());
+  router.use("/tenants", createTenantsRouter());
 
   if (deps.scheduledExportsService) {
     router.use(
